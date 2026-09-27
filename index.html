@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Enterprise Assurance &amp; Audit Processing Platform — Architecture Showcase</title>
+  <meta name="description" content="A client-facing Solution Architecture showcase for an event-driven, cloud-native Assurance & Audit platform on Angular, ASP.NET Core and Azure." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/css/theme.css?v=20260927e" />
+  <link rel="stylesheet" href="assets/css/components.css?v=20260927e" />
+</head>
+<body>
+  <!-- Top bar -->
+  <header class="topbar">
+    <button class="icon-btn nav-toggle" id="navToggle" aria-label="Toggle navigation">
+      <svg viewBox="0 0 24 24" width="20" height="20"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+    </button>
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="26" height="26">
+          <defs>
+            <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="var(--accent)"/>
+              <stop offset="1" stop-color="var(--accent-2)"/>
+            </linearGradient>
+          </defs>
+          <rect x="2" y="2" width="28" height="28" rx="8" fill="url(#bg)"/>
+          <path d="M9 17l4 4 10-11" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <span class="brand-title">Review Dashboard</span>
+        <span class="brand-sub">Solution Architecture Showcase</span>
+      </div>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-actions">
+      <span class="badge badge-live"><span class="dot"></span> Architecture Workshop</span>
+      <button class="icon-btn" id="prevBtn" aria-label="Previous section" title="Previous">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="icon-btn" id="nextBtn" aria-label="Next section" title="Next">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="icon-btn" id="themeToggle" aria-label="Toggle theme" title="Toggle light / dark">
+        <svg class="icon-moon" viewBox="0 0 24 24" width="18" height="18"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- Sidebar navigation -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-scroll" id="navList"><!-- injected --></div>
+      <div class="sidebar-footer">
+        <div class="progress-wrap">
+          <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <span class="sidebar-foot-text" id="progressText">Section 1 of 30</span>
+      </div>
+    </aside>
+    <div class="scrim" id="scrim"></div>
+
+    <!-- Main content -->
+    <main class="content" id="content" tabindex="-1">
+      <div class="content-inner" id="view"><!-- injected --></div>
+      <footer class="page-foot">
+        <span>&copy; 2026 <a href="https://www.linkedin.com/in/charan-tata-04b44739/" target="_blank" rel="noopener noreferrer">Charan Tata</a>. All rights reserved.</span>
+        <span class="foot-sep">•</span>
+        <span>Review Dashboard — Solution Architecture Showcase.</span>
+        <span class="foot-sep">•</span>
+        <span>Reference architecture for demonstration. Example targets are configurable per client requirements.</span>
+      </footer>
+    </main>
+  </div>
+
+  <!-- Detail drawer for interactive nodes -->
+  <div class="drawer-scrim" id="drawerScrim"></div>
+  <aside class="drawer" id="drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <div>
+        <div class="drawer-kicker" id="drawerKicker">Component</div>
+        <h3 class="drawer-title" id="drawerTitle">Title</h3>
+      </div>
+      <button class="icon-btn" id="drawerClose" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="drawer-body" id="drawerBody"><!-- injected --></div>
+  </aside>
+
+  <!-- Scripts (classic scripts so it runs from file:// without a server) -->
+  <script src="assets/js/renderer.js?v=20260927e"></script>
+  <script src="assets/js/content/overview.js?v=20260927e"></script>
+  <script src="assets/js/content/architecture.js?v=20260927e"></script>
+  <script src="assets/js/content/data.js?v=20260927e"></script>
+  <script src="assets/js/content/patterns.js?v=20260927e"></script>
+  <script src="assets/js/content/messaging.js?v=20260927e"></script>
+  <script src="assets/js/content/integration.js?v=20260927e"></script>
+  <script src="assets/js/content/quality.js?v=20260927e"></script>
+  <script src="assets/js/content/delivery.js?v=20260927e"></script>
+  <script src="assets/js/app.js?v=20260927e"></script>
+</body>
+</html>
