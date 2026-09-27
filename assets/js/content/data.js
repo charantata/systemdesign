@@ -75,7 +75,95 @@ window.SECTIONS.push({
 "CREATE FUNCTION dbo.GetTransactionsByStatus (@status NVARCHAR(30))\nRETURNS TABLE\nAS RETURN\n(\n    SELECT TransactionId, CustomerId, Amount, CreatedDate\n    FROM   AuditTransaction\n    WHERE  Status = @status\n);\nGO\n-- Composed like a table:\nSELECT t.*, c.Name\nFROM   dbo.GetTransactionsByStatus('APPROVAL_REQUIRED') t\nJOIN   Customer c ON c.Id = t.CustomerId;" },
     { type: "code", title: "Calling SQL functions from Dapper", lang: "csharp", label: "DapperReads.cs", code:
 "// Inline TVF -> strongly-typed rows, no EF overhead\nconst string sql = @\"SELECT TransactionId, CustomerId, Amount, CreatedDate\n                     FROM dbo.GetTransactionsByStatus(@status)\";\nvar rows = await _conn.QueryAsync<TransactionRow>(sql, new { status });\n\n// Scalar aggregate\nvar total = await _conn.ExecuteScalarAsync<decimal>(\n    \"SELECT SUM(Amount) FROM AuditTransaction WHERE Status = @s\",\n    new { s = \"PAYMENT_COMPLETED\" });" },
-    { type: "callout", kind: "ok", title: "Where these live in the architecture", body: "Aggregates and window functions power the <b>Observability</b> and <b>NFR</b> dashboards; JSON functions read Outbox/Webhook payloads; inline TVFs back the CQRS <b>read side</b> via Dapper. Writes never use functions for logic — that stays in the domain model (see EF Core &amp; Dapper)." },
+    { type: "tabs", title: "Ranking, CTEs, temp tables & joins", tabs: [
+      { label: "Ranking functions", blocks: [
+        { type: "para", body: "<code>ROW_NUMBER</code>, <code>RANK</code> and <code>DENSE_RANK</code> look similar but differ in exactly one thing — <b>how they treat ties</b>. Getting this wrong is a classic bug (wrong \"top N\", duplicate winners, off-by-gaps)." },
+        { type: "code", lang: "sql", label: "ranking.sql", code:
+"-- The three ranking functions differ ONLY in how they treat ties\nSELECT\n    CustomerId, Amount,\n    ROW_NUMBER() OVER (ORDER BY Amount DESC) AS RowNum,   -- 1,2,3,4,5  always unique\n    RANK()       OVER (ORDER BY Amount DESC) AS Rnk,      -- 1,2,2,4,5  gaps after a tie\n    DENSE_RANK() OVER (ORDER BY Amount DESC) AS DenseRnk, -- 1,2,2,3,4  no gaps\n    NTILE(4)     OVER (ORDER BY Amount DESC) AS Quartile  -- split rows into 4 buckets\nFROM AuditTransaction;" },
+        { type: "table", title: "How each treats ties", head: ["Function", "On a tie", "Sequence example", "Use it for"], rows: [
+          ["<code>ROW_NUMBER()</code>", "Breaks ties arbitrarily — every row unique", "1, 2, 3, 4, 5", "Pagination, de-dup, exactly-one-per-group"],
+          ["<code>RANK()</code>", "Ties share a rank, then <b>skips</b>", "1, 2, 2, 4, 5", "Leaderboards where gaps are meaningful"],
+          ["<code>DENSE_RANK()</code>", "Ties share a rank, <b>no gap</b>", "1, 2, 2, 3, 4", "\"Top 3 distinct values\" style queries"],
+          ["<code>NTILE(n)</code>", "Splits rows into n equal buckets", "quartiles / percentiles", "Bucketing, cohorts, percentiles"],
+        ]},
+        { type: "callout", kind: "warn", title: "Always give ranking a deterministic ORDER BY", body: "Ranking depends entirely on the <code>OVER (ORDER BY …)</code>. If the sort key has duplicates, add a tiebreaker (e.g. <code>ORDER BY Amount DESC, Id</code>) or <code>ROW_NUMBER</code> results are non-deterministic across runs." },
+        { type: "code", lang: "sql", label: "rank-patterns.sql", code:
+"-- Top 3 transactions PER customer (top-N-per-group)\nWITH Ranked AS (\n    SELECT *, ROW_NUMBER() OVER (PARTITION BY CustomerId\n                                 ORDER BY Amount DESC, Id) AS rn\n    FROM AuditTransaction)\nSELECT * FROM Ranked WHERE rn <= 3;\n\n-- Latest status row per transaction (rn = 1)\nWITH Latest AS (\n    SELECT *, ROW_NUMBER() OVER (PARTITION BY TransactionId\n                                 ORDER BY CreatedDate DESC) AS rn\n    FROM AuditStatusHistory)\nSELECT * FROM Latest WHERE rn = 1;\n\n-- De-duplicate: keep newest per key, delete the rest\nWITH Dupes AS (\n    SELECT *, ROW_NUMBER() OVER (PARTITION BY TransactionId\n                                 ORDER BY CreatedDate DESC) AS rn\n    FROM AuditStatusHistory)\nDELETE FROM Dupes WHERE rn > 1;" },
+      ]},
+      { label: "CTEs & recursion", blocks: [
+        { type: "para", body: "A <b>Common Table Expression</b> is a named, readable subquery scoped to the next statement. Chain several to build a pipeline; use a <b>recursive CTE</b> to walk hierarchies (approval chains, org charts, category trees)." },
+        { type: "code", lang: "sql", label: "cte.sql", code:
+"-- Basic CTE — a named, readable, single-use subquery\nWITH RecentHighValue AS (\n    SELECT TransactionId, CustomerId, Amount\n    FROM   AuditTransaction\n    WHERE  CreatedDate >= DATEADD(DAY, -7, SYSUTCDATETIME())\n      AND  Amount > 10000)\nSELECT c.Name, r.TransactionId, r.Amount\nFROM   RecentHighValue r\nJOIN   Customer c ON c.Id = r.CustomerId;\n\n-- Chained CTEs — a step-by-step pipeline\nWITH Paid AS (\n        SELECT * FROM Payment WHERE Status = 'Completed'),\n     PerCustomer AS (\n        SELECT CustomerId, SUM(Amount) AS Total\n        FROM Paid GROUP BY CustomerId)\nSELECT * FROM PerCustomer WHERE Total > 50000;" },
+        { type: "code", lang: "sql", label: "recursive-cte.sql", code:
+"-- Recursive CTE — walk an approval / reporting hierarchy\nWITH ApprovalChain AS (\n    -- anchor member (the starting row)\n    SELECT UserId, ManagerId, 1 AS Level\n    FROM   Users WHERE UserId = @startUserId\n    UNION ALL\n    -- recursive member (joins back to the CTE)\n    SELECT u.UserId, u.ManagerId, c.Level + 1\n    FROM   Users u\n    JOIN   ApprovalChain c ON u.UserId = c.ManagerId)\nSELECT UserId, ManagerId, Level\nFROM   ApprovalChain\nOPTION (MAXRECURSION 100);   -- guard against runaway / cyclic data" },
+        { type: "callout", kind: "warn", title: "A CTE is not a temp table", body: "In SQL Server a CTE is <b>inlined / expanded</b> into the query — referencing it multiple times <b>re-executes</b> it each time. If an expensive result is reused several times, materialise it into a <code>#temp</code> table instead. (PostgreSQL: CTEs were an optimisation fence before v12; from v12 they inline — control it with <code>MATERIALIZED</code> / <code>NOT MATERIALIZED</code>.)" },
+      ]},
+      { label: "Temp tables vs table vars", blocks: [
+        { type: "table", title: "CTE vs table variable vs temp table", head: ["Aspect", "CTE", "Table variable <code>@t</code>", "Temp table <code>#t</code>"], rows: [
+          ["Scope", "Next statement only", "Batch / procedure", "Whole session / connection"],
+          ["Statistics", "None (inlined)", "None (est. 1 row)", "<b>Yes</b> — real cardinality"],
+          ["Indexes", "No", "PK / UNIQUE only", "<b>Full</b> (create after load)"],
+          ["Reuse", "Re-evaluated each reference", "Reusable", "Reusable"],
+          ["Best for", "Readability, recursion", "Small sets (&lt; ~100 rows)", "Large / reused sets needing good plans"],
+          ["Lives in", "—", "tempdb", "tempdb"],
+        ]},
+        { type: "code", lang: "sql", label: "temp.sql", code:
+"-- Temp table — materialised, indexable, has statistics; ideal for large reused sets\nSELECT a.Id, a.CustomerId, a.Amount\nINTO   #HighValue\nFROM   AuditTransaction a\nWHERE  a.Amount > 10000;\n\nCREATE INDEX IX_tmp_Customer ON #HighValue(CustomerId);   -- index the temp set\n\nSELECT CustomerId, COUNT(*) AS Cnt, SUM(Amount) AS Total\nFROM   #HighValue\nGROUP BY CustomerId;\n\nDROP TABLE #HighValue;\n\n-- Table variable — small sets only; poor cardinality estimate at scale\nDECLARE @ids TABLE (Id UNIQUEIDENTIFIER PRIMARY KEY);" },
+        { type: "callout", kind: "info", title: "Rule of thumb", body: "<b>CTE</b> for readability & recursion (single use). <b>Table variable</b> only for genuinely small sets. <b>Temp table</b> when the intermediate set is large, reused, or the optimiser needs statistics to pick a good plan." },
+      ]},
+      { label: "Joins", blocks: [
+        { type: "para", body: "Know the join types and the semi/anti-join patterns — most \"slow query\" and \"wrong count\" bugs live here." },
+        { type: "code", lang: "sql", label: "joins.sql", code:
+"-- INNER: only matching rows\nSELECT a.TransactionId, p.Amount\nFROM AuditTransaction a\nJOIN Payment p ON p.AuditTransactionId = a.Id;\n\n-- LEFT: all transactions; payment columns NULL when none\nSELECT a.TransactionId, p.Status\nFROM AuditTransaction a\nLEFT JOIN Payment p ON p.AuditTransactionId = a.Id;\n\n-- SEMI-join: transactions that HAVE a completed payment (EXISTS short-circuits)\nSELECT a.TransactionId\nFROM AuditTransaction a\nWHERE EXISTS (SELECT 1 FROM Payment p\n              WHERE p.AuditTransactionId = a.Id AND p.Status = 'Completed');\n\n-- ANTI-join: transactions with NO payment (prefer NOT EXISTS over NOT IN)\nSELECT a.TransactionId\nFROM AuditTransaction a\nWHERE NOT EXISTS (SELECT 1 FROM Payment p WHERE p.AuditTransactionId = a.Id);\n\n-- APPLY: latest payment per transaction (correlated top-1)\nSELECT a.TransactionId, lp.Amount\nFROM AuditTransaction a\nCROSS APPLY (SELECT TOP 1 Amount FROM Payment p\n             WHERE p.AuditTransactionId = a.Id\n             ORDER BY p.CreatedDate DESC) lp;" },
+        { type: "callout", kind: "warn", title: "NOT IN + NULL = silent wrong results", body: "If the subquery of a <code>NOT IN (…)</code> returns even one <code>NULL</code>, the whole predicate yields no rows. Always use <code>NOT EXISTS</code> for anti-joins. Also: filter an outer (LEFT) join's right table in the <code>ON</code> clause, not <code>WHERE</code> — a <code>WHERE</code> predicate on the right table quietly turns a LEFT join back into an INNER join." },
+        { type: "callout", kind: "info", title: "Physical join operators", body: "The optimiser picks <b>nested loops</b> (small/indexed), <b>merge</b> (both sorted) or <b>hash</b> (large, unsorted) joins based on statistics. You don't choose them — but a nested loop over millions of rows in the plan is a red flag that an index or better estimate is missing." },
+      ]},
+    ]},
+
+    { type: "accordion", title: "Query performance tuning", items: [
+      { title: "Return only what you need — never SELECT *", badge: "I/O", open: true, blocks: [
+        { type: "para", body: "Select only the columns and rows you use. Fewer columns enable <b>covering indexes</b> and cut I/O, memory and network. Filter early, and <b>paginate</b> large result sets rather than pulling everything to the app." } ]},
+      { title: "Keep predicates SARGable", badge: "Indexes", blocks: [
+        { type: "para", body: "A predicate is <b>SARGable</b> (index-seekable) only if the indexed column is left untouched. Wrapping it in a function, or an implicit type conversion, forces a scan." },
+        { type: "code", lang: "sql", label: "sargable.sql", code:
+"-- NOT SARGable: function on the column -> index scan\nWHERE YEAR(CreatedDate) = 2026\nWHERE CONVERT(date, CreatedDate) = '2026-09-27'\nWHERE Status LIKE '%FAILED'          -- leading wildcard\n\n-- SARGable: range on the raw column -> index seek\nWHERE CreatedDate >= '2026-01-01' AND CreatedDate < '2027-01-01'\nWHERE CreatedDate >= @day AND CreatedDate < DATEADD(DAY, 1, @day)\nWHERE Status LIKE 'PAYMENT%'         -- trailing wildcard is fine" } ]},
+      { title: "Design the right indexes", badge: "Indexes", blocks: [
+        { type: "para", body: "Composite index column order = <b>equality columns first, then the range/sort column</b>. Add <code>INCLUDE</code> columns to make an index <b>covering</b> (no key lookup). Use <b>filtered indexes</b> for hot subsets (e.g. <code>WHERE Status='Pending'</code>). Don't over-index — every index is write & storage cost." },
+        { type: "code", lang: "sql", label: "index.sql", code:
+"-- Covering index for a common worklist query\nCREATE NONCLUSTERED INDEX IX_Audit_Status_Created\n    ON AuditTransaction (Status, CreatedDate)   -- equality then range/sort\n    INCLUDE (TransactionId, CustomerId, Amount); -- covers the SELECT list" } ]},
+      { title: "Read the plan; keep statistics fresh", badge: "Plans", blocks: [
+        { type: "para", body: "Compare <b>estimated vs actual rows</b> in the execution plan. Watch for: table/index <b>scans</b> where a seek is expected, <b>key lookups</b> (add INCLUDE), <b>sort/hash spills</b> to tempdb, and fat arrows (bad estimates → stale stats). Refresh with <code>UPDATE STATISTICS</code>, and beware <b>parameter sniffing</b> (a plan cached for an atypical parameter) — mitigate with <code>OPTION (RECOMPILE)</code> or <code>OPTIMIZE FOR</code> where justified." } ]},
+      { title: "Paginate with keyset, not deep OFFSET", badge: "Paging", blocks: [
+        { type: "para", body: "<code>OFFSET 100000 ROWS</code> still scans and throws away those 100k rows. Use <b>keyset / seek pagination</b> — carry the last key forward." },
+        { type: "code", lang: "sql", label: "paging.sql", code:
+"-- Slow at depth: OFFSET scans & discards\nSELECT ... ORDER BY CreatedDate DESC\nOFFSET 100000 ROWS FETCH NEXT 20 ROWS ONLY;\n\n-- Fast: keyset / seek pagination (index on CreatedDate)\nSELECT TOP (20) ...\nFROM AuditTransaction\nWHERE CreatedDate < @lastSeenDate\nORDER BY CreatedDate DESC;" } ]},
+      { title: "Think in sets; batch big DML", badge: "RBAR", blocks: [
+        { type: "para", body: "Replace cursors / row-by-row loops (RBAR — \"row by agonizing row\") with a single set-based statement. For very large updates/deletes, <b>batch</b> to avoid long transactions and lock escalation." },
+        { type: "code", lang: "sql", label: "batch.sql", code:
+"-- Batched delete: short transactions, avoids lock escalation\nWHILE 1 = 1\nBEGIN\n    DELETE TOP (5000) FROM AuditLog WHERE CreatedAt < @cutoff;\n    IF @@ROWCOUNT = 0 BREAK;\nEND" } ]},
+      { title: "Concurrency, isolation & deadlocks", badge: "Locking", blocks: [
+        { type: "para", body: "Keep transactions <b>short</b> and touch objects in a <b>consistent order</b> to avoid deadlocks. Consider <b>Read Committed Snapshot Isolation (RCSI)</b> so readers don't block writers. Match isolation to the operation — strong for money movement, snapshot/relaxed for dashboards (ties back to primary-vs-replica reads)." } ]},
+      { title: "Parameterize everything", badge: "Plan cache", blocks: [
+        { type: "para", body: "Parameterized queries <b>reuse cached plans</b> and <b>prevent SQL injection</b>. Never concatenate user input into SQL. This is exactly how Dapper/EF Core send queries — keep it that way for dynamic SQL too." } ]},
+      { title: "Avoid app-side N+1", badge: "App", blocks: [
+        { type: "para", body: "One query per row (N+1) is death by round-trips. Join / batch at the database and return a shaped result set (an inline TVF or a single query), rather than looping calls from the service. See <b>EF Core &amp; Dapper</b>." } ]},
+    ]},
+
+    { type: "table", title: "SQL revision checklist", desc: "What to check when reviewing or revising a query — beyond \"does it return the right rows.\"", head: ["Check", "What to look for"], rows: [
+      ["Correctness on NULLs", "<code>NOT IN</code> with NULLs, <code>= NULL</code> (use <code>IS NULL</code>), aggregates skipping NULLs, LEFT-join filters in WHERE vs ON"],
+      ["SARGability", "No functions / implicit conversions on indexed columns; no leading <code>%</code> wildcards"],
+      ["Indexes used", "Seeks not scans; covering indexes; correct composite column order"],
+      ["Only needed data", "No <code>SELECT *</code>; filter early; paginate (keyset, not deep OFFSET)"],
+      ["Set-based", "No cursors / RBAR; large DML batched"],
+      ["Deterministic order", "Explicit <code>ORDER BY</code> for ranking & pagination — never rely on implicit order"],
+      ["Transaction scope", "Short transactions; correct isolation; deadlock-safe object order"],
+      ["Parameterized", "No string concatenation (injection + plan-cache bloat)"],
+      ["Plan reviewed", "Estimated vs actual rows; key lookups; spills; fresh statistics"],
+      ["Portability", "SQL Server vs PostgreSQL syntax differences noted where relevant"],
+      ["Security", "Least-privilege; no dynamic SQL without parameters"],
+    ]},
+
+    { type: "callout", kind: "ok", title: "Where these live in the architecture", body: "Aggregates and window/ranking functions power the <b>Observability</b> and <b>NFR</b> dashboards; CTEs and joins shape the CQRS <b>read side</b>; performance tuning keeps reads off the primary and fast (with Redis in front — see <b>Redis &amp; CQRS Sync</b> and <b>Sharding · Replica · Partitioning</b>). JSON functions read Outbox/Webhook payloads; inline TVFs back Dapper reads. Writes never use functions for business logic — that stays in the domain model (see <b>EF Core &amp; Dapper</b>)." },
   ],
 });
 

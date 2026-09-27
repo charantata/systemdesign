@@ -41,6 +41,114 @@ window.SECTIONS.push({
   ],
 });
 
+/* ---------- Angular Front-End ---------- */
+window.SECTIONS.push({
+  id: "angular-frontend", group: "Real-Time & Integration", label: "Angular Front-End",
+  kicker: "Client Architecture", title: "Angular front-end — the client side of the design",
+  sub: "How the Angular SPA is built to consume this platform: real-time via SignalR, secure calls via JWT with a refresh-token flow and CSRF protection, disciplined component lifecycle, and the right forms strategy. This is the client counterpart to the SignalR, Security and API sections.",
+  blocks: [
+    { type: "flow", title: "How the Angular app talks to the platform",
+      diagramTitle: "Component → services → interceptors → API / Hub",
+      legend: [ {cat:"client",label:"Angular"},{cat:"sec",label:"Security"},{cat:"api",label:"Backend"},{cat:"mon",label:"Real-time"} ],
+      steps: [
+        { name: "Component", tech: "signals / OnPush", icon: "angular", cat: "client" },
+        { name: "Feature service", tech: "HttpClient / state", icon: "cog", cat: "client", edge: "call" },
+        { edge: "every request passes through", parallel: [
+          { name: "Auth interceptor", tech: "attach JWT · refresh on 401", icon: "lock", cat: "sec" },
+          { name: "XSRF interceptor", tech: "CSRF token (cookie auth)", icon: "shield", cat: "sec" },
+          { name: "Error interceptor", tech: "retry · toast", icon: "retry", cat: "ext" },
+        ]},
+        { name: "API Gateway", tech: "REST over HTTPS", icon: "gateway", cat: "api", edge: "Bearer", detail: D.gateway },
+        { name: "SignalR Hub", tech: "live updates → signal", icon: "signalr", cat: "mon", edge: "WebSocket (side channel)", detail: D.signalr },
+      ]},
+    { type: "code", title: "App structure", lang: "bash", label: "src/app", code:
+"src/app\n  /core\n      /interceptors   auth.interceptor.ts · xsrf · error.interceptor.ts\n      /guards         auth.guard.ts · role.guard.ts\n      /services       auth.service.ts · token.service.ts · signalr.service.ts\n  /features           lazy-loaded feature routes (standalone components)\n  /shared             ui components, pipes, directives, validators\n  environments        environment.ts / environment.prod.ts (API + hub URLs)" },
+
+    { type: "tabs", title: "The client-side design in detail", tabs: [
+
+      { label: "SignalR consumption", blocks: [
+        { type: "para", body: "A singleton service owns the hub connection: it authenticates with the current access token, auto-reconnects, routes server events into <b>signals</b>, and is consumed by components without manual subscription juggling." },
+        { type: "code", lang: "typescript", label: "signalr.service.ts", code:
+"@Injectable({ providedIn: 'root' })\nexport class RealtimeService {\n  private readonly status = signal<'up' | 'down'>('down');\n  readonly txStatus = signal<Record<string, string>>({});\n\n  private connection = new signalR.HubConnectionBuilder()\n    .withUrl(environment.hubUrl, {\n      accessTokenFactory: () => this.auth.accessToken() ?? ''  // JWT on connect & reconnect\n    })\n    .withAutomaticReconnect([0, 2000, 5000, 10000])\n    .configureLogging(signalR.LogLevel.Warning)\n    .build();\n\n  async start(): Promise<void> {\n    this.connection.on('TransactionStatusChanged', (e: TxStatusEvent) =>\n      this.txStatus.update(m => ({ ...m, [e.transactionId]: e.status })));\n    this.connection.onreconnected(() => this.status.set('up'));\n    this.connection.onclose(() => this.status.set('down'));\n    await this.connection.start();\n    this.status.set('up');\n  }\n  stop() { return this.connection.stop(); }\n}" },
+        { type: "code", lang: "typescript", label: "component usage", code:
+"@Component({ /* ... */ changeDetection: ChangeDetectionStrategy.OnPush })\nexport class OrderComponent {\n  private rt = inject(RealtimeService);\n  status = computed(() => this.rt.txStatus()[this.id()] ?? 'PENDING'); // live, reactive\n}" },
+        { type: "callout", kind: "info", title: "Connect after auth, not before", body: "Start the hub only once a valid token exists, and let <code>accessTokenFactory</code> supply a fresh token on every (re)connect — so a token that refreshed mid-session is used on reconnect. Targeting (per-user / per-role groups) is done server-side (see <b>SignalR / WebSockets</b>)." },
+      ]},
+
+      { label: "JWT · refresh · CSRF", blocks: [
+        { type: "para", body: "Access tokens are attached by an interceptor, kept <b>in memory</b> (never <code>localStorage</code>), and silently refreshed. The refresh token lives in an <b>httpOnly, Secure, SameSite cookie</b> the JS can't read — and that cookie-based refresh endpoint is exactly where <b>CSRF protection</b> applies." },
+        { type: "code", lang: "typescript", label: "auth.interceptor.ts", code:
+"export const authInterceptor: HttpInterceptorFn = (req, next) => {\n  const auth = inject(AuthService);\n  const token = auth.accessToken();\n  const authed = token ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }) : req;\n\n  return next(authed).pipe(\n    catchError((err: HttpErrorResponse) => {\n      if (err.status === 401 && !req.url.includes('/refresh')) {\n        return auth.refresh().pipe(          // silent refresh (shared, de-duped)\n          switchMap(t => next(authed.clone({\n            setHeaders: { Authorization: `Bearer ${t}` } }))) // retry once\n        );\n      }\n      return throwError(() => err);\n    })\n  );\n};" },
+        { type: "code", lang: "typescript", label: "auth.service.ts — refresh (single-flight)", code:
+"private refresh$?: Observable<string>;\n\nrefresh(): Observable<string> {\n  // Share ONE refresh call across all queued 401s (no refresh storm)\n  this.refresh$ ??= this.http.post<{ accessToken: string }>('/api/auth/refresh', {},\n      { withCredentials: true })                 // sends the httpOnly refresh cookie\n    .pipe(\n      tap(r => this.accessToken.set(r.accessToken)),\n      map(r => r.accessToken),\n      finalize(() => this.refresh$ = undefined),\n      shareReplay(1)\n    );\n  return this.refresh$;\n}" },
+        { type: "code", lang: "typescript", label: "app.config.ts — XSRF (CSRF) + tokens", code:
+"provideHttpClient(\n  withInterceptors([authInterceptor, errorInterceptor]),\n  withXsrfConfiguration({            // double-submit cookie for cookie-authed calls\n    cookieName: 'XSRF-TOKEN',\n    headerName: 'X-XSRF-TOKEN'\n  })\n)" },
+        { type: "callout", kind: "warn", title: "Token storage & CSRF — the rules", body: "<b>Access token</b> → in memory (a signal/BehaviorSubject); <b>never</b> <code>localStorage</code>/<code>sessionStorage</code> (XSS-readable). <b>Refresh token</b> → httpOnly + Secure + SameSite cookie (JS can't read it). <b>CSRF</b> protection (anti-forgery token / SameSite) guards the <i>cookie-based</i> refresh & logout endpoints; pure Bearer APIs aren't CSRF-exposed because the token isn't sent automatically by the browser." },
+        { type: "callout", kind: "info", title: "CSRF ≠ CORS (again)", body: "<b>CORS</b> = which browser origins may call the API (browser-enforced). <b>CSRF</b> = stops a malicious site abusing an authenticated <i>cookie</i> session. Configure both; they are unrelated controls (see <b>Security</b>)." },
+      ]},
+
+      { label: "Component lifecycle", blocks: [
+        { type: "para", body: "Use the right hook for the right job — and always clean up subscriptions. Modern Angular uses <code>takeUntilDestroyed()</code> / <code>DestroyRef</code> so you rarely write <code>ngOnDestroy</code> by hand." },
+        { type: "table", title: "Lifecycle hooks & when to use them", head: ["Hook", "Fires", "Use it for"], rows: [
+          ["<code>constructor</code>", "On instantiation", "DI only — no work, no HTTP"],
+          ["<code>ngOnChanges</code>", "On @Input change (before init & on updates)", "React to input changes"],
+          ["<code>ngOnInit</code>", "Once, after first inputs set", "Initial data load, subscriptions"],
+          ["<code>ngDoCheck</code>", "Every change-detection run", "Custom checks (use sparingly)"],
+          ["<code>ngAfterViewInit</code>", "After the view & @ViewChild ready", "DOM / child-component access"],
+          ["<code>ngAfterContentInit</code>", "After projected content ready", "@ContentChild access"],
+          ["<code>ngOnDestroy</code>", "Just before teardown", "Unsubscribe, disconnect, timers"],
+        ]},
+        { type: "code", lang: "typescript", label: "lifecycle + cleanup", code:
+"export class DashboardComponent implements OnInit {\n  private api = inject(ApiService);\n  private destroyRef = inject(DestroyRef);\n  orders = signal<Order[]>([]);\n\n  ngOnInit(): void {\n    this.api.getOrders()\n      .pipe(takeUntilDestroyed(this.destroyRef))   // auto-unsubscribe on destroy\n      .subscribe(o => this.orders.set(o));\n  }\n}" },
+        { type: "callout", kind: "ok", title: "Change detection: prefer OnPush + signals", body: "<code>ChangeDetectionStrategy.OnPush</code> plus <b>signals</b> means the view updates only when inputs or signals actually change — far fewer checks, better performance on real-time-heavy screens (order lists, dashboards, live tracking)." },
+      ]},
+
+      { label: "Forms: Reactive vs Template", blocks: [
+        { type: "vs", title: "Two forms strategies",
+          left: { icon: "code", title: "Reactive forms", blocks: [
+            { type: "para", body: "The form model is defined in <b>TypeScript</b> (<code>FormGroup</code>/<code>FormControl</code>). Explicit, testable, great for complex/dynamic forms and custom/async validation." },
+            { type: "featureList", variant: "pros", items: ["Model in code — unit-testable", "Dynamic controls & cross-field rules", "Sync + <b>async</b> validators (server checks)", "Typed forms; predictable data flow"] },
+            { type: "featureList", variant: "cons", items: ["More boilerplate for trivial forms"] },
+          ]},
+          right: { icon: "doc", title: "Template-driven forms", blocks: [
+            { type: "para", body: "The form is built from directives in the <b>template</b> (<code>ngModel</code>). Minimal code — good for simple, small forms." },
+            { type: "featureList", variant: "pros", items: ["Very little code for simple forms", "Familiar two-way binding"] },
+            { type: "featureList", variant: "cons", items: ["Logic hidden in the template", "Harder to test & scale", "Async / dynamic validation awkward"] },
+          ]},
+        },
+        { type: "code", lang: "typescript", label: "reactive form + async validator", code:
+"form = this.fb.group({\n  amount:   [0, [Validators.required, Validators.min(1)]],\n  currency: ['USD', Validators.required],\n  customerId: ['', {\n    validators: [Validators.required],\n    asyncValidators: [this.eligibility.check()],   // hits the Eligibility API\n    updateOn: 'blur'\n  }]\n});\n\nsubmit() {\n  if (this.form.invalid) { this.form.markAllAsTouched(); return; }\n  this.api.create(this.form.getRawValue()).subscribe(/* ... */);\n}" },
+        { type: "code", lang: "typescript", label: "template-driven (for simple forms)", code:
+"<form #f=\"ngForm\" (ngSubmit)=\"save(f.value)\">\n  <input name=\"email\" ngModel required email />\n  <button [disabled]=\"f.invalid\">Save</button>\n</form>" },
+        { type: "table", title: "Which to choose", head: ["Criterion", "Reactive", "Template-driven"], rows: [
+          ["Form complexity", "Medium → complex", "Simple / small"],
+          ["Where the model lives", "TypeScript", "Template"],
+          ["Testability", "High", "Lower"],
+          ["Dynamic / cross-field rules", "Easy", "Hard"],
+          ["Async validation (server)", "First-class", "Awkward"],
+          ["Recommended default here", "✅ Reactive", "Only for trivial forms"],
+        ]},
+      ]},
+
+      { label: "Cross-cutting", blocks: [
+        { type: "caps", title: "The rest of a production Angular app", cols: 3, items: [
+          { icon: "bolt", cat: "app", title: "Signals & RxJS", desc: "Signals for state; RxJS for streams; always clean up." },
+          { icon: "retry", cat: "ext", title: "Error interceptor", desc: "Central error handling, retry with backoff, user toasts." },
+          { icon: "lock", cat: "sec", title: "Route guards", desc: "Auth & role guards protect routes and lazy modules." },
+          { icon: "shield", cat: "sec", title: "RBAC in UI", desc: "Show/hide by role/permission — mirrors API policies." },
+          { icon: "scale", cat: "app", title: "Lazy loading", desc: "Feature routes loaded on demand; smaller initial bundle." },
+          { icon: "shield", cat: "sec", title: "XSS safety", desc: "Angular auto-sanitizes; avoid bypassSecurityTrust." },
+          { icon: "monitor", cat: "mon", title: "Observability", desc: "App Insights JS SDK; propagate correlation IDs." },
+          { icon: "cog", cat: "app", title: "Config per env", desc: "environment.ts for API/hub URLs & feature flags." },
+          { icon: "user", cat: "client", title: "Accessibility & i18n", desc: "ARIA, keyboard nav, localization." },
+        ]},
+        { type: "callout", kind: "ok", title: "How it ties back", body: "The Angular client mirrors the backend contracts end-to-end: JWT/roles match the <b>Security</b> policies, SignalR events match the <b>Notification</b> flow, correlation IDs match <b>Observability</b>, and REST calls hit the <b>API Catalog</b> through the gateway. Same design, both sides of the wire." },
+      ]},
+
+    ]},
+  ],
+});
+
 /* ---------- 16 Payment Integration ---------- */
 window.SECTIONS.push({
   id: "payment", num: "16", group: "Real-Time & Integration", label: "Payment Integration",

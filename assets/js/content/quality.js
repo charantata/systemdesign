@@ -74,6 +74,100 @@ window.SECTIONS.push({
   ],
 });
 
+/* ---------- Testing, Code Quality & Security Scanning ---------- */
+window.SECTIONS.push({
+  id: "testing-quality", group: "Quality Attributes", label: "Testing & Code Quality",
+  kicker: "Quality Gates", title: "Testing, code quality & security scanning",
+  sub: "Correctness and security are proven by automation, not opinion: NUnit + Moq unit tests with coverage, SonarQube static analysis as a merge-blocking quality gate, and Brinqa aggregating security findings across all scanners into one prioritised risk view. These gates plug directly into the CI/CD pipeline.",
+  blocks: [
+    { type: "flow", title: "The quality & security pipeline",
+      diagramTitle: "PR → tests → SonarQube gate → Brinqa risk",
+      legend: [ {cat:"client",label:"Dev"},{cat:"api",label:"CI"},{cat:"app",label:"Tests"},{cat:"sec",label:"Scan / gate"},{cat:"ext",label:"Risk"} ],
+      steps: [
+        { name: "Pull Request", tech: "feature → main", icon: "code", cat: "client" },
+        { name: "CI build", tech: "GitHub Actions", icon: "cog", cat: "api", edge: "on PR / push" },
+        { name: "NUnit + Moq + coverage", tech: "unit tests · coverlet", icon: "check", cat: "app", edge: "run tests" },
+        { name: "SonarQube", tech: "bugs · vulns · smells · coverage", icon: "monitor", cat: "sec", edge: "quality gate (pass/fail)" },
+        { name: "Security scanners", tech: "SAST · SCA · DAST · secrets", icon: "shield", cat: "sec", edge: "findings" },
+        { name: "Brinqa", tech: "aggregate · dedupe · risk-score", icon: "shield", cat: "ext", edge: "unified risk posture" },
+        { name: "Merge & Deploy", tech: "only if gates pass", icon: "rocket", cat: "app", edge: "gated", detail: null },
+      ]},
+    { type: "callout", kind: "info", title: "Two layers of quality", body: "<b>SonarQube</b> works at the <b>code level</b> — is this change well-built and free of bugs/vulnerabilities, with enough test coverage? <b>Brinqa</b> works at the <b>organisation level</b> — pulling findings from Sonar and every other scanner into one prioritised, de-duplicated view of security risk across all applications and assets." },
+
+    { type: "tabs", title: "The three pillars", tabs: [
+
+      { label: "NUnit + Moq", blocks: [
+        { type: "para", body: "Unit tests exercise the domain and application handlers in isolation. <b>NUnit</b> is the test framework; <b>Moq</b> fakes the ports (repositories, bus, external clients) so a handler is tested without a database or network." },
+        { type: "code", lang: "csharp", label: "ApproveAuditHandlerTests.cs", code:
+"public class ApproveAuditHandlerTests\n{\n    private Mock<IAuditCaseRepository> _repo = default!;\n    private Mock<IUnitOfWork> _uow = default!;\n    private ApproveAuditHandler _sut = default!;\n\n    [SetUp]\n    public void SetUp()\n    {\n        _repo = new Mock<IAuditCaseRepository>();\n        _uow  = new Mock<IUnitOfWork>();\n        _sut  = new ApproveAuditHandler(_repo.Object, _uow.Object);\n    }\n\n    [Test]\n    public async Task Handle_WhenCaseInReview_ApprovesAndSavesOnce()\n    {\n        // Arrange\n        var aggregate = AuditCase.OpenForReview();\n        _repo.Setup(r => r.GetAsync(aggregate.Id, It.IsAny<CancellationToken>()))\n             .ReturnsAsync(aggregate);                       // stub the port\n\n        // Act\n        await _sut.Handle(new ApproveAuditCommand(aggregate.Id, Guid.NewGuid()),\n                          CancellationToken.None);\n\n        // Assert\n        Assert.That(aggregate.Status, Is.EqualTo(AuditStatus.Approved));\n        _uow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);\n    }\n\n    [Test]\n    public void Handle_WhenCaseMissing_ThrowsAndNeverSaves()\n    {\n        _repo.Setup(r => r.GetAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))\n             .ReturnsAsync((AuditCase?)null);\n\n        Assert.ThrowsAsync<NotFoundException>(() =>\n            _sut.Handle(new ApproveAuditCommand(Guid.NewGuid(), Guid.NewGuid()),\n                        CancellationToken.None));\n\n        _uow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);\n    }\n}" },
+        { type: "code", lang: "csharp", label: "parameterized tests", code:
+"[TestCase(AuditStatus.New)]\n[TestCase(AuditStatus.Approved)]\npublic void Approve_FromInvalidState_Throws(AuditStatus state)\n{\n    var c = AuditCase.WithStatus(state);\n    Assert.Throws<DomainException>(() => c.Approve(Guid.NewGuid()));\n}" },
+        { type: "featureList", title: "Moq essentials", items: [
+          "<code>Setup(...).Returns / ReturnsAsync</code> — stub what a dependency returns",
+          "<code>Setup(...).Throws&lt;T&gt;()</code> — simulate failure paths",
+          "<code>Verify(..., Times.Once/Never/Exactly)</code> — assert interactions happened",
+          "<code>It.IsAny&lt;T&gt;()</code> / <code>It.Is&lt;T&gt;(x =&gt; …)</code> — argument matching",
+          "<code>Callback(...)</code> — capture arguments passed to a mock",
+          "<code>MockBehavior.Strict</code> — fail on any unexpected call" ]},
+        { type: "callout", kind: "ok", title: "What to test (and mock)", body: "Test the <b>domain</b> (aggregate invariants) and <b>application handlers</b> — the code where bugs cost most. Mock only the <b>ports</b> (repositories, bus, external clients). Don't mock the domain itself. Integration tests (a real DB + Service Bus emulator) and contract tests cover the wiring." },
+      ]},
+
+      { label: "SonarQube", blocks: [
+        { type: "para", body: "<b>SonarQube</b> (or SonarCloud, the SaaS version) runs static analysis on every PR and enforces a <b>Quality Gate</b> — a set of pass/fail conditions. If the gate fails, the required check is red and branch protection blocks the merge." },
+        { type: "table", title: "What SonarQube measures", head: ["Dimension", "Detects"], rows: [
+          ["<b>Reliability</b>", "Bugs — code that will likely fail at runtime"],
+          ["<b>Security</b>", "Vulnerabilities + <b>Security Hotspots</b> (code to review)"],
+          ["<b>Maintainability</b>", "Code smells & technical debt"],
+          ["<b>Coverage</b>", "% of code covered by your tests (from coverlet)"],
+          ["<b>Duplications</b>", "Copy-pasted blocks"],
+        ]},
+        { type: "code", lang: "bash", label: "SonarScanner in CI (.NET)", code:
+"dotnet tool install --global dotnet-sonarscanner\n\ndotnet sonarscanner begin \\\n  /k:\"assurance-audit\" \\\n  /d:sonar.host.url=\"$SONAR_HOST\" \\\n  /d:sonar.token=\"$SONAR_TOKEN\" \\\n  /d:sonar.cs.opencover.reportsPaths=\"**/coverage.opencover.xml\"\n\ndotnet build -c Release\ndotnet test -c Release --collect:\"XPlat Code Coverage\"   # produces coverage\n\ndotnet sonarscanner end /d:sonar.token=\"$SONAR_TOKEN\"    # uploads + evaluates gate" },
+        { type: "table", title: "A typical Quality Gate (on NEW code)", head: ["Condition", "Threshold"], rows: [
+          ["Coverage on new code", "&ge; 80%"],
+          ["New bugs", "0"],
+          ["New vulnerabilities", "0"],
+          ["Security hotspots reviewed", "100%"],
+          ["Duplicated lines on new code", "&lt; 3%"],
+          ["Maintainability rating", "A"],
+        ]},
+        { type: "callout", kind: "warn", title: "Gate on NEW code, not the whole repo", body: "\"Clean as You Code\": enforce the gate on the code changed in the PR, not the entire legacy codebase. New work stays clean without needing a big-bang cleanup of everything first. Wire the Sonar check into <b>required status checks</b> (see GitHub CI/CD & Deploy)." },
+      ]},
+
+      { label: "Code coverage", blocks: [
+        { type: "para", body: "In .NET, <b>coverlet</b> collects coverage during <code>dotnet test</code> and emits a report (Cobertura / OpenCover) that SonarQube (and PR checks) consume." },
+        { type: "code", lang: "bash", label: "coverage.sh", code:
+"# Option A: built-in collector (Cobertura)\ndotnet test --collect:\"XPlat Code Coverage\"\n\n# Option B: coverlet.msbuild -> OpenCover (what Sonar reads)\ndotnet test /p:CollectCoverage=true \\\n            /p:CoverletOutputFormat=opencover \\\n            /p:CoverletOutput=./coverage.opencover.xml\n\n# Human-readable HTML report\ndotnet tool install --global dotnet-reportgenerator-globaltool\nreportgenerator -reports:**/coverage.*.xml -targetdir:coveragereport" },
+        { type: "callout", kind: "info", title: "Coverage is a floor, not a goal", body: "80% coverage of <i>meaningful</i> assertions is far better than 100% that asserts nothing. Prioritise coverage of the <b>domain and handlers</b>; don't chase coverage on generated code, DTOs or Program.cs. Sonar's <b>coverage on new code</b> keeps the number honest over time." },
+      ]},
+
+      { label: "Brinqa", blocks: [
+        { type: "para", body: "<b>Brinqa</b> is a Cyber Risk Posture / vulnerability-management platform. It <b>ingests findings from every security tool</b>, normalises and de-duplicates them, correlates them to assets and owners, applies risk-based prioritisation, and tracks remediation against SLAs — turning scattered scanner output into one actionable risk view for security and leadership." },
+        { type: "table", title: "Sources Brinqa aggregates", head: ["Category", "Example tools"], rows: [
+          ["SAST (static)", "<b>SonarQube</b>, Checkmarx, Fortify"],
+          ["SCA (dependencies)", "Dependabot, Snyk, OWASP Dependency-Check"],
+          ["DAST (running app)", "OWASP ZAP, Burp"],
+          ["Secrets scanning", "GitHub secret scanning, Gitleaks"],
+          ["Cloud / infra", "Defender for Cloud, Prisma, Tenable"],
+          ["Pen tests & manual", "Imported findings / tickets"],
+        ]},
+        { type: "caps", title: "What Brinqa does with them", cols: 3, items: [
+          { icon: "inbox", cat: "ext", title: "Aggregate & normalise", desc: "One schema across many scanners." },
+          { icon: "check", cat: "db", title: "De-duplicate & correlate", desc: "One issue, not five; mapped to the asset & owner." },
+          { icon: "scale", cat: "app", title: "Risk-based scoring", desc: "Prioritise by exploitability & business impact, not raw CVSS." },
+          { icon: "retry", cat: "sec", title: "Remediation & SLAs", desc: "Assign, track and enforce fix deadlines." },
+          { icon: "monitor", cat: "mon", title: "Dashboards & reporting", desc: "Posture over time for teams & leadership." },
+          { icon: "cog", cat: "app", title: "Automation", desc: "Auto-ticket (Jira), notify owners, close on re-scan." },
+        ]},
+        { type: "callout", kind: "ok", title: "SonarQube feeds Brinqa", body: "SonarQube finds and gates security issues <i>in this codebase</i>; its findings (plus SCA, DAST, cloud, etc.) flow into <b>Brinqa</b>, which answers the bigger question — <i>\"across all our applications, what is our security risk and what do we fix first?\"</i>" },
+      ]},
+
+    ]},
+
+    { type: "callout", kind: "ok", title: "How it ties into delivery", body: "These gates live in the pipeline (see <b>GitHub CI/CD & Deploy</b>): NUnit/Moq tests and the SonarQube Quality Gate are <b>required status checks</b> that block a merge to main; coverage proves correctness; and Brinqa gives an org-wide, prioritised security posture on top. Quality and security become automatic and non-negotiable, not a manual afterthought." },
+  ],
+});
+
 /* ---------- Key Vault, Azure Logging & Blob ---------- */
 window.SECTIONS.push({
   id: "platform-services", group: "Quality Attributes", label: "Key Vault · Logging · Blob",

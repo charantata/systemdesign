@@ -2,7 +2,7 @@
 
 A **client-facing Solution Architecture showcase portal**. It presents an enterprise-grade, event-driven, cloud-native **Assurance & Audit processing platform** the way a Principal Solution Architect would demonstrate it to CTOs, CIOs, Enterprise Architects and business stakeholders during a technical proposal or architecture workshop.
 
-It is a single, self-contained web app: open it in a browser and walk a client from **business problem → proposed architecture → why → how data flows → how failures are handled → how it scales → how it evolves**, across **39 interactive sections** with diagrams, sequence flows, code and design rationale.
+It is a single, self-contained web app: open it in a browser and walk a client from **business problem → proposed architecture → why → how data flows → how failures are handled → how it scales → how it evolves**, across **42 interactive sections** with diagrams, sequence flows, code and design rationale.
 
 > **Two different "stacks" in this project — don't confuse them:**
 > 1. **What the showcase app is built with** — plain HTML/CSS/JavaScript (this document, first section below).
@@ -27,7 +27,7 @@ This portal is deliberately built as a **zero-dependency, zero-build static web 
 
 ### Key architectural choices of the app
 
-- **Data-driven rendering engine.** Content is *not* hand-written HTML. Each section is a JavaScript object describing an array of typed **blocks**; a small renderer (`renderer.js`) turns blocks into HTML. This keeps all 39 sections visually consistent and makes editing content a matter of editing data, not markup.
+- **Data-driven rendering engine.** Content is *not* hand-written HTML. Each section is a JavaScript object describing an array of typed **blocks**; a small renderer (`renderer.js`) turns blocks into HTML. This keeps all 42 sections visually consistent and makes editing content a matter of editing data, not markup.
 - **Custom lightweight syntax highlighter.** A regex-based tokenizer in `renderer.js` colours C#, SQL, JSON, TypeScript, HTTP and Bash snippets — no Prism/Highlight.js dependency.
 - **Theming.** Dark (default) and light themes via CSS variables; the choice is persisted in `localStorage`.
 - **Interactivity** (all vanilla JS, wired in `app.js`): clickable diagram nodes → slide-in **detail drawer**; an interactive **state machine**; an animated **"Play Flow"** sequence player; pill **tabs**, **accordions**, expandable **ADR** cards; copy-to-clipboard on code blocks; **auto-numbered** navigation; hash-based deep-linking; prev/next and a reading-progress bar.
@@ -95,17 +95,17 @@ ArchitectureOverView/
             ├── architecture.js # Sections 05–09  (incl. Domain-Driven Design)
             ├── data.js         # Sections 10–13  (Data & Persistence)
             ├── patterns.js     # Sections 14–15  (Saga, Outbox)
-            ├── messaging.js    # Sections 16–19
-            ├── integration.js  # Sections 20–23
-            ├── quality.js      # Sections 24–30
-            └── delivery.js     # Sections 31–39
+            ├── messaging.js    # Sections 16–20  (incl. RabbitMQ)
+            ├── integration.js  # Sections 21–25
+            ├── quality.js      # Sections 26–33
+            └── delivery.js     # Sections 34–42
 ```
 
 **Load order matters:** `index.html` loads the content files in the order above, and the left-nav groups appear in that order. Section numbers are assigned automatically from final position (see `app.js`), so inserting a new section never desyncs the badges.
 
 ---
 
-## 5. What's covered (all 39 sections)
+## 5. What's covered (all 42 sections)
 
 Organised into 7 navigation groups.
 
@@ -147,38 +147,41 @@ Organised into 7 navigation groups.
 | 17 | **Publisher / Subscriber** | Three consumer models (Function / Worker / API-driven) with a decision matrix and code. |
 | 18 | **Azure Functions** | Serverless, elastic consumers; Service Bus trigger with explicit settlement; Functions-vs-Worker trade-off. |
 | 19 | **Event Grid** | Event notification & routing; Event Grid vs Service Bus, and how they are used together. |
+| 20 | **RabbitMQ** | Open-source AMQP broker: the exchange→binding→queue model, exchange types (direct/topic/fanout/headers), hosting (Docker/K8s/CloudAMQP), publish & consume in C# (`RabbitMQ.Client`: durable queues, publisher confirms, prefetch, manual ack, DLX), reliability (quorum queues, TTL retry, idempotency), tooling (Management UI, rabbitmqctl, MassTransit/EasyNetQ), and RabbitMQ vs Azure Service Bus. |
 
 ### Real-Time & Integration
 | # | Section | What it covers |
 |---|---|---|
-| 20 | **SignalR / WebSockets** | Real-time status from bus → hub → WebSocket → Angular; SignalR vs raw WebSockets; hub + Angular client code. |
-| 21 | **Payment Integration** | KyrePay flow, API surface, and outbound integration concerns (auth, idempotency, timeout, resilience, anti-corruption). |
-| 22 | **Webhooks** | Secure inbound callback pipeline: validate → dedup → persist → publish → fast 200; never process synchronously. |
-| 23 | **Security** | OIDC → JWT → API flow, JWT claims, roles/RBAC, authorization at every level, and defence-in-depth (TLS, Key Vault, WAF, rate limiting, audit logging). |
+| 21 | **SignalR / WebSockets** | Real-time status from bus → hub → WebSocket → Angular; SignalR vs raw WebSockets; hub + Angular client code. |
+| 22 | **Angular Front-End** | The client side of the design: app structure, **SignalR consumption** (signals), **JWT + refresh-token + CSRF** (in-memory access token, httpOnly refresh cookie, single-flight silent refresh, XSRF config, CSRF≠CORS), component **lifecycle** hooks + `takeUntilDestroyed` + OnPush, **Reactive vs Template-driven forms** (comparison + async validators), and cross-cutting concerns (guards, RBAC UI, lazy loading, XSS, observability). |
+| 23 | **Payment Integration** | KyrePay flow, API surface, and outbound integration concerns (auth, idempotency, timeout, resilience, anti-corruption). |
+| 24 | **Webhooks** | Secure inbound callback pipeline: validate → dedup → persist → publish → fast 200; never process synchronously. |
+| 25 | **Security** | OIDC → JWT → API flow, JWT claims, roles/RBAC, authorization at every level, and defence-in-depth (TLS, Key Vault, WAF, rate limiting, audit logging). |
 
 ### Quality Attributes
 | # | Section | What it covers |
 |---|---|---|
-| 24 | **Failure & Resilience** | Resilience toolkit; 10 failure scenarios with detection/response/recovery; composed Polly policy; graceful degradation. |
-| 25 | **Observability** | Telemetry pipeline, one distributed trace across the whole flow, correlation signals, and correlation-ID middleware. |
-| 26 | **Key Vault · Logging · Blob** | Three Azure platform services accessed via one Managed Identity: secrets (Key Vault), structured logging + KQL, and Blob storage with user-delegation SAS. |
-| 27 | **Scalability** | Scaling strategy per tier, queue-based load leveling, and scaling dimensions. |
-| 28 | **Scaling for Max Load** | What scaling is to reach maximum sustainable load: vertical vs horizontal, bottleneck removal, autoscale rules, load testing (load/stress/spike/soak), capacity planning (Little's Law) and the Universal Scalability Law. |
-| 29 | **Disaster Recovery** | Multi-region active/passive, RTO/RPO targets, and DR building blocks. |
-| 30 | **NFR Dashboard** | Non-functional targets across performance, availability, reliability, security, DR, compliance and more (illustrative, configurable). |
+| 26 | **Failure & Resilience** | Resilience toolkit; 10 failure scenarios with detection/response/recovery; composed Polly policy; graceful degradation. |
+| 27 | **Observability** | Telemetry pipeline, one distributed trace across the whole flow, correlation signals, and correlation-ID middleware. |
+| 28 | **Testing & Code Quality** | Quality gates that prove correctness & security: **NUnit + Moq** unit tests (stub ports, verify interactions), **code coverage** (coverlet), **SonarQube** static analysis + merge-blocking Quality Gate (bugs, vulnerabilities, hotspots, coverage), and **Brinqa** aggregating findings from all scanners (SAST/SCA/DAST/secrets/cloud) into one prioritised security-risk view. |
+| 29 | **Key Vault · Logging · Blob** | Three Azure platform services accessed via one Managed Identity: secrets (Key Vault), structured logging + KQL, and Blob storage with user-delegation SAS. |
+| 30 | **Scalability** | Scaling strategy per tier, queue-based load leveling, and scaling dimensions. |
+| 31 | **Scaling for Max Load** | What scaling is to reach maximum sustainable load: vertical vs horizontal, bottleneck removal, autoscale rules, load testing (load/stress/spike/soak), capacity planning (Little's Law) and the Universal Scalability Law. |
+| 32 | **Disaster Recovery** | Multi-region active/passive, RTO/RPO targets, and DR building blocks. |
+| 33 | **NFR Dashboard** | Non-functional targets across performance, availability, reliability, security, DR, compliance and more (illustrative, configurable). |
 
 ### Delivery
 | # | Section | What it covers |
 |---|---|---|
-| 31 | **API Catalog** | Endpoint catalogue with security, idempotency and correlation conventions; contract detail. |
-| 32 | **End-to-End Flow** | **Animated 11-step sequence player** ("Play / Step / Reset") of a full create-audit-and-pay transaction. |
-| 33 | **Architecture Decision Records** | 8 expandable ADRs (Service Bus, Saga, Outbox, SignalR, SQL/PG, Functions, Event Grid, CQRS) with context, decision, alternatives, consequences. |
-| 34 | **Sample Architectures** | Gallery of canonical patterns (layered, event-driven, saga, outbox, real-time, third-party, serverless, hybrid). |
-| 35 | **Microservices vs Monolith** | Modular monolith → microservices evolution and why a full rewrite is rarely needed. |
-| 36 | **Implementation Roadmap** | Indicative 10-phase delivery plan from Discovery to Production. |
-| 37 | **GitHub CI/CD & Deploy** | GitHub controls & automatic deployment: branch protection on main, required approvals/status checks, CI + CD **GitHub Actions** workflows, auto-deploy on merge to main, environment approval gates, passwordless **OIDC** deploy to Azure, and blue/green rollback. Includes the team's real in-use .NET pipeline (build/test → email → deploy to Azure VM IIS via WinRM). |
-| 38 | **Eight Industries, One Platform** | The same reference architecture applied to eight businesses — Pharmacy, Uber-like ride booking, Zomato-like food ordering, employee car-pooling, Zerodha-like trading, student loans, Amazon-like e-commerce, and BookMyShow-like ticketing. Shows the common edge/security/microservice platform (incl. CORS≠CSRF), the **multi-portal model** (customer + employee/admin portals per app via RBAC), the reusable CQRS+Outbox+Saga loop, and per-industry flows with **portals & personas** and a platform-mapping table (real-time channel, consistency, Redis, key services, saga + compensation, Boomi/scheduled). BookMyShow highlights **geo-based availability + seat-lock (no double-booking)**. |
-| 39 | **Why This Architecture** | Measurable outcomes, the end-to-end story recap, and the next step. |
+| 34 | **API Catalog** | Endpoint catalogue with security, idempotency and correlation conventions; contract detail. |
+| 35 | **End-to-End Flow** | **Animated 11-step sequence player** ("Play / Step / Reset") of a full create-audit-and-pay transaction. |
+| 36 | **Architecture Decision Records** | 8 expandable ADRs (Service Bus, Saga, Outbox, SignalR, SQL/PG, Functions, Event Grid, CQRS) with context, decision, alternatives, consequences. |
+| 37 | **Sample Architectures** | Gallery of canonical patterns (layered, event-driven, saga, outbox, real-time, third-party, serverless, hybrid). |
+| 38 | **Microservices vs Monolith** | Modular monolith → microservices evolution and why a full rewrite is rarely needed. |
+| 39 | **Implementation Roadmap** | Indicative 10-phase delivery plan from Discovery to Production. |
+| 40 | **GitHub CI/CD & Deploy** | GitHub controls & automatic deployment: branch protection on main, required approvals/status checks, CI + CD **GitHub Actions** workflows, auto-deploy on merge to main, environment approval gates, passwordless **OIDC** deploy to Azure, and blue/green rollback. Includes the team's real in-use .NET pipeline (build/test → email → deploy to Azure VM IIS via WinRM). |
+| 41 | **Eight Industries, One Platform** | The same reference architecture applied to eight businesses — Pharmacy, Uber-like ride booking, Zomato-like food ordering, employee car-pooling, Zerodha-like trading, student loans, Amazon-like e-commerce, and BookMyShow-like ticketing. Shows the common edge/security/microservice platform (incl. CORS≠CSRF), the **multi-portal model** (customer + employee/admin portals per app via RBAC), the reusable CQRS+Outbox+Saga loop, and per-industry flows with **portals & personas** and a platform-mapping table (real-time channel, consistency, Redis, key services, saga + compensation, Boomi/scheduled). BookMyShow highlights **geo-based availability + seat-lock (no double-booking)**. |
+| 42 | **Why This Architecture** | Measurable outcomes, the end-to-end story recap, and the next step. |
 
 ---
 

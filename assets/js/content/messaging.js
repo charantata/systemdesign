@@ -138,3 +138,120 @@ window.SECTIONS.push({
     { type: "callout", kind: "ok", title: "Used together", body: "A common enterprise pattern: Event Grid <b>notifies</b> broadly and cheaply, then hands work that must not be lost to <b>Service Bus</b> for guaranteed, ordered processing. Notification is reactive; business processing is reliable." },
   ],
 });
+
+/* ---------- RabbitMQ ---------- */
+window.SECTIONS.push({
+  id: "rabbitmq", group: "Messaging & Events", label: "RabbitMQ",
+  kicker: "Open-Source Broker", title: "RabbitMQ — messaging without cloud lock-in",
+  sub: "RabbitMQ is a battle-tested, open-source message broker speaking AMQP. It's the go-to when you need cloud-agnostic or on-prem messaging, or richer routing than a managed cloud bus. This page covers the model, how it's hosted, how you publish and consume in C#, and the tooling around it.",
+  blocks: [
+    { type: "callout", kind: "info", title: "The mental model", body: "A producer never publishes to a queue directly — it publishes to an <b>exchange</b>, which routes the message to zero or more <b>queues</b> via <b>bindings</b> and a <b>routing key</b>. Consumers read from queues. This indirection (exchange → binding → queue) is what makes RabbitMQ's routing so flexible." },
+    { type: "flow", title: "How a message flows",
+      diagramTitle: "Producer → Exchange → Queues → Consumers",
+      legend: [ {cat:"app",label:"App"},{cat:"msg",label:"Broker"},{cat:"sec",label:"DLX"} ],
+      steps: [
+        { name: "Producer", tech: "C# app · publish", icon: "cog", cat: "app" },
+        { name: "Exchange", tech: "direct / topic / fanout / headers", icon: "grid", cat: "msg", edge: "publish (routing key)" },
+        { edge: "bindings route to queues", parallel: [
+          { name: "Queue: orders", tech: "durable", icon: "queue", cat: "msg" },
+          { name: "Queue: audit", tech: "durable", icon: "queue", cat: "msg" },
+          { name: "Queue: notify", tech: "durable", icon: "queue", cat: "msg" },
+        ]},
+        { name: "Consumers", tech: "competing · prefetch · ack", icon: "worker", cat: "app", edge: "deliver + manual ack" },
+        { name: "Dead Letter Exchange", tech: "poison / rejected messages", icon: "alert", cat: "sec", edge: "nack (no requeue)" },
+      ]},
+    { type: "caps", title: "Core concepts", cols: 4, items: [
+      { icon: "api", cat: "app", title: "Connection & Channel", desc: "One TCP connection; many lightweight channels multiplex over it." },
+      { icon: "cog", cat: "app", title: "Producer", desc: "Publishes messages to an exchange with a routing key." },
+      { icon: "grid", cat: "msg", title: "Exchange", desc: "Routes messages to queues by type + bindings." },
+      { icon: "queue", cat: "msg", title: "Queue", desc: "Buffers messages until a consumer acks them." },
+      { icon: "flow", cat: "msg", title: "Binding + routing key", desc: "The rule linking an exchange to a queue." },
+      { icon: "worker", cat: "app", title: "Consumer", desc: "Subscribes to a queue and processes messages." },
+      { icon: "check", cat: "db", title: "Ack / Nack", desc: "Consumer confirms success or rejects for retry/DLX." },
+      { icon: "alert", cat: "sec", title: "Dead Letter Exchange", desc: "Where rejected / expired messages are routed." },
+    ]},
+    { type: "table", title: "Exchange types — how routing works", head: ["Exchange", "Routes by", "Use it for"], rows: [
+      ["<b>direct</b>", "Exact routing-key match", "Point-to-point / command queues (<code>order.created</code>)"],
+      ["<b>topic</b>", "Wildcard pattern (<code>order.*.created</code>, <code>audit.#</code>)", "Pub/sub with selective subscriptions"],
+      ["<b>fanout</b>", "Ignores key — broadcasts to all bound queues", "Broadcast events to every subscriber"],
+      ["<b>headers</b>", "Message header attributes", "Routing on multiple metadata fields"],
+    ]},
+
+    { type: "tabs", title: "Working with RabbitMQ", tabs: [
+
+      { label: "Hosting", blocks: [
+        { type: "para", body: "RabbitMQ is a server you run — there's no first-party Azure RabbitMQ (Azure's native broker is Service Bus). Your options:" },
+        { type: "table", head: ["Where", "How", "Best for"], rows: [
+          ["Local / dev", "Docker container (<code>rabbitmq:3-management</code>)", "Development & testing"],
+          ["Kubernetes (AKS)", "RabbitMQ Cluster Operator or Helm chart; 3+ nodes, quorum queues", "Self-managed HA in the cloud"],
+          ["VM cluster", "Install on VMs behind a load balancer", "On-prem / lift-and-shift"],
+          ["Managed", "<b>CloudAMQP</b> (Azure/AWS/GCP marketplace) or <b>Amazon MQ for RabbitMQ</b>", "No ops — someone else runs it"],
+        ]},
+        { type: "code", lang: "bash", label: "run locally with the management UI", code:
+"docker run -d --name rabbit \\\n  -p 5672:5672   # AMQP (apps connect here) \\\n  -p 15672:15672 # Management UI  ->  http://localhost:15672  (guest/guest) \\\n  rabbitmq:3-management" },
+        { type: "code", lang: "yaml", label: "docker-compose.yml", code:
+"services:\n  rabbitmq:\n    image: rabbitmq:3-management\n    ports:\n      - \"5672:5672\"     # AMQP\n      - \"15672:15672\"   # Management UI\n      - \"15692:15692\"   # Prometheus metrics\n    environment:\n      RABBITMQ_DEFAULT_USER: app\n      RABBITMQ_DEFAULT_PASS: ${RMQ_PASS}\n    volumes:\n      - rabbit-data:/var/lib/rabbitmq   # persist queues & messages\nvolumes:\n  rabbit-data:" },
+        { type: "callout", kind: "info", title: "Ports to remember", body: "<code>5672</code> = AMQP (what your C# app connects to), <code>15672</code> = the web Management UI, <code>15692</code> = Prometheus metrics endpoint. In production, put a real vhost/user (not <code>guest</code>, which is localhost-only), enable TLS on 5671, and use a 3-node cluster with <b>quorum queues</b>." },
+      ]},
+
+      { label: "Publish (C#)", blocks: [
+        { type: "para", body: "The official <code>RabbitMQ.Client</code> library. Declare a <b>durable</b> queue, mark messages <b>persistent</b>, and turn on <b>publisher confirms</b> so you know the broker accepted the message." },
+        { type: "code", lang: "csharp", label: "Publisher.cs (RabbitMQ.Client)", code:
+"var factory = new ConnectionFactory {\n    HostName = \"rabbit\", UserName = \"app\", Password = cfg[\"Rmq:Pass\"],\n    VirtualHost = \"/\"\n};\nusing var connection = factory.CreateConnection();\nusing var channel = connection.CreateModel();\n\nchannel.QueueDeclare(queue: \"orders\", durable: true,        // survives restart\n                     exclusive: false, autoDelete: false, arguments: null);\nchannel.ConfirmSelect();                                      // publisher confirms\n\nvar props = channel.CreateBasicProperties();\nprops.Persistent   = true;                                    // write to disk\nprops.MessageId     = order.Id.ToString();                    // for idempotency\nprops.CorrelationId = correlationId;                          // distributed tracing\nprops.ContentType   = \"application/json\";\n\nvar body = JsonSerializer.SerializeToUtf8Bytes(order);\nchannel.BasicPublish(exchange: \"\", routingKey: \"orders\",     // default exchange -> queue\n                     basicProperties: props, body: body);\nchannel.WaitForConfirmsOrDie(TimeSpan.FromSeconds(5));        // broker confirmed it" },
+        { type: "callout", kind: "info", title: "Client v7 is async", body: "The examples use the familiar <code>IModel</code> API. RabbitMQ.Client <b>v7</b> is fully asynchronous — <code>CreateChannelAsync()</code>, <code>BasicPublishAsync()</code>, <code>AsyncEventingBasicConsumer</code>. The concepts are identical; the calls are awaited." },
+      ]},
+
+      { label: "Consume (C#)", blocks: [
+        { type: "para", body: "Host the consumer as a <b>BackgroundService</b>. Set a <b>prefetch</b> count for fair dispatch, use <b>manual acks</b>, and route failures to a <b>dead-letter exchange</b>." },
+        { type: "code", lang: "csharp", label: "OrderConsumer.cs (BackgroundService)", code:
+"public class OrderConsumer : BackgroundService\n{\n    private IConnection _conn = default!;\n    private IModel _channel = default!;\n\n    protected override Task ExecuteAsync(CancellationToken ct)\n    {\n        var factory = new ConnectionFactory { HostName = \"rabbit\", DispatchConsumersAsync = true };\n        _conn = factory.CreateConnection();\n        _channel = _conn.CreateModel();\n\n        // Route rejected messages to a dead-letter exchange\n        _channel.QueueDeclare(\"orders\", durable: true, exclusive: false, autoDelete: false,\n            arguments: new Dictionary<string, object> { [\"x-dead-letter-exchange\"] = \"orders.dlx\" });\n        _channel.BasicQos(prefetchSize: 0, prefetchCount: 20, global: false);  // fair dispatch\n\n        var consumer = new AsyncEventingBasicConsumer(_channel);\n        consumer.Received += async (_, ea) =>\n        {\n            try\n            {\n                var id = ea.BasicProperties.MessageId;\n                if (await _dedupe.SeenAsync(id)) { _channel.BasicAck(ea.DeliveryTag, false); return; } // idempotent\n\n                var evt = JsonSerializer.Deserialize<OrderPlaced>(ea.Body.Span)!;\n                await _handler.HandleAsync(evt);\n                await _dedupe.MarkAsync(id);\n                _channel.BasicAck(ea.DeliveryTag, multiple: false);                 // success\n            }\n            catch (TransientException)\n            {\n                _channel.BasicNack(ea.DeliveryTag, multiple: false, requeue: true);  // retry\n            }\n            catch (Exception)\n            {\n                _channel.BasicNack(ea.DeliveryTag, multiple: false, requeue: false); // -> DLX\n            }\n        };\n        _channel.BasicConsume(\"orders\", autoAck: false, consumer);                   // manual ack\n        return Task.CompletedTask;\n    }\n\n    public override void Dispose() { _channel?.Dispose(); _conn?.Dispose(); base.Dispose(); }\n}" },
+        { type: "callout", kind: "warn", title: "Always ack manually + be idempotent", body: "With <code>autoAck: false</code>, a message stays on the queue until you <code>BasicAck</code>. If the consumer crashes mid-process, RabbitMQ redelivers it — so consumers <b>must be idempotent</b> (dedupe by <code>MessageId</code>). <code>BasicNack(requeue: false)</code> sends poison messages to the DLX instead of looping forever." },
+      ]},
+
+      { label: "Reliability", blocks: [
+        { type: "caps", cols: 4, items: [
+          { icon: "db", cat: "db", title: "Durable + persistent", desc: "Durable queues + persistent messages survive a broker restart." },
+          { icon: "check", cat: "db", title: "Publisher confirms", desc: "Broker acknowledges it stored the message." },
+          { icon: "worker", cat: "app", title: "Consumer acks", desc: "Manual ack = at-least-once; redeliver on crash." },
+          { icon: "alert", cat: "sec", title: "Dead-letter exchange", desc: "Isolate poison / expired messages." },
+          { icon: "scale", cat: "app", title: "Quorum queues", desc: "Raft-replicated queues for HA (preferred over classic mirrored)." },
+          { icon: "cog", cat: "app", title: "Prefetch (QoS)", desc: "Limit unacked messages per consumer for fair dispatch." },
+          { icon: "retry", cat: "ext", title: "TTL + retry", desc: "Message/queue TTL; delayed retry via DLX + TTL." },
+          { icon: "shield", cat: "sec", title: "Idempotency", desc: "Dedupe by MessageId — at-least-once means duplicates happen." },
+        ]},
+        { type: "callout", kind: "info", title: "Delayed retry pattern", body: "RabbitMQ has no native scheduled retry. The common trick: <code>nack</code> to a <b>DLX</b> whose queue has a <b>TTL</b>; when the TTL expires the message dead-letters <i>back</i> to the main queue — an exponential-backoff retry loop. Or install the <b>delayed-message</b> plugin. (MassTransit does this for you.)" },
+      ]},
+
+      { label: "Tools & libraries", blocks: [
+        { type: "table", title: "Operational tooling", head: ["Tool", "What it's for"], rows: [
+          ["<b>Management UI</b> (15672)", "Browse queues/exchanges, publish test messages, watch rates, purge"],
+          ["<code>rabbitmqctl</code>", "Cluster admin: users, vhosts, policies, status"],
+          ["<code>rabbitmqadmin</code>", "CLI/scriptable: declare & inspect exchanges/queues"],
+          ["<b>Shovel</b> / <b>Federation</b> plugins", "Move/replicate messages between brokers or regions"],
+          ["<b>Prometheus + Grafana</b>", "Metrics (queue depth, publish/ack rates, memory) & alerts"],
+        ]},
+        { type: "para", title: "C# libraries", body: "Beyond the raw <code>RabbitMQ.Client</code>, higher-level libraries remove boilerplate:" },
+        { type: "featureList", items: [
+          "<b>MassTransit</b> — the popular choice: consumers, retries, DLQ, <b>sagas</b>, outbox, scheduling — and it can target RabbitMQ <i>or</i> Azure Service Bus with the same code.",
+          "<b>EasyNetQ</b> — a simple, opinionated API over RabbitMQ.Client for quick pub/sub.",
+          "<b>NServiceBus</b> — enterprise service bus with RabbitMQ transport." ]},
+        { type: "code", lang: "csharp", label: "MassTransit over RabbitMQ (recommended)", code:
+"builder.Services.AddMassTransit(x =>\n{\n    x.AddConsumer<OrderPlacedConsumer>();\n    x.UsingRabbitMq((ctx, cfg) =>\n    {\n        cfg.Host(\"rabbit\", \"/\", h => { h.Username(\"app\"); h.Password(cfg2[\"Rmq:Pass\"]); });\n        cfg.ReceiveEndpoint(\"orders\", e =>\n        {\n            e.PrefetchCount = 20;\n            e.UseMessageRetry(r => r.Exponential(5,\n                TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(2)));\n            e.ConfigureConsumer<OrderPlacedConsumer>(ctx);   // auto _error (DLQ) queue\n        });\n    });\n});" },
+        { type: "callout", kind: "ok", title: "Prefer a library over the raw client", body: "For anything beyond a demo, use <b>MassTransit</b>: you get retries, dead-lettering, the outbox, sagas and consumer lifecycle for free — and switching the transport from RabbitMQ to Azure Service Bus is a one-line change (<code>UsingRabbitMq</code> → <code>UsingAzureServiceBus</code>)." },
+      ]},
+
+    ]},
+
+    { type: "vs", title: "RabbitMQ vs Azure Service Bus — when to choose which",
+      left: { icon: "queue", title: "RabbitMQ", blocks: [
+        { type: "featureList", variant: "pros", items: ["Cloud-agnostic & on-prem — no lock-in", "Rich, flexible routing via exchanges", "Open-source; low latency; huge community", "Runs anywhere (Docker, K8s, VM, CloudAMQP)"] },
+        { type: "featureList", variant: "cons", items: ["You operate it (or pay CloudAMQP)", "No native scheduled delivery / dedup (DIY or plugin)", "Clustering & upgrades are your responsibility"] },
+      ]},
+      right: { icon: "bus", title: "Azure Service Bus", blocks: [
+        { type: "featureList", variant: "pros", items: ["Fully managed — zero ops", "Sessions (FIFO), duplicate detection, scheduled messages", "Geo-DR, deep Azure integration & security", "This platform's default broker"] },
+        { type: "featureList", variant: "cons", items: ["Azure-coupled", "Less flexible routing than exchanges", "Cost at high throughput (Premium MUs)"] },
+      ]},
+    },
+    { type: "callout", kind: "ok", title: "How it fits this platform", body: "This reference architecture uses <b>Azure Service Bus</b> as its backbone (see <b>Service Bus</b>). RabbitMQ is the answer when you need <b>cloud-agnostic or on-prem</b> messaging, hybrid deployments, or richer exchange-based routing. Because we go through <b>MassTransit</b>, the broker is an implementation detail — the same consumers, sagas and outbox run on either, so you can start on RabbitMQ on-prem and move to Service Bus in Azure (or vice-versa) without rewriting business code." },
+  ],
+});

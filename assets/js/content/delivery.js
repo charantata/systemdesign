@@ -738,7 +738,7 @@ window.SECTIONS.push({
         "<b>Third parties</b> → KyrePay, webhooks, isolation",
         "<b>How it evolves</b> → modular monolith → microservices" ]},
       { type: "kpis", cols: 2, items: [
-        { val: "39", label: "Architecture sections", note: "in this showcase" },
+        { val: "42", label: "Architecture sections", note: "in this showcase" },
         { val: "8", label: "ADRs documented", note: "decisions with rationale" },
         { val: "18+", label: "Design patterns", note: "applied deliberately" },
         { val: "10", label: "Delivery phases", note: "indicative roadmap" },
