@@ -200,7 +200,7 @@ window.SECTIONS.push({
   blocks: [
     { type: "callout", kind: "info", title: "The core idea", body: "Put each business rule <b>next to the business concept that owns it</b>, expressed in the same language the domain experts use. A change to a rule (\"an audit case can't be paid before it's approved\") then maps to one obvious place in the code — the aggregate that owns it — instead of being scattered across controllers, services and stored procedures." },
     { type: "caps", title: "Why DDD here", cols: 3, items: [
-      { icon: "domain", cat: "domain", title: "Time complexity", desc: "Code structure mirrors business structure; rules live where they belong." },
+      { icon: "domain", cat: "domain", title: "Tames complexity", desc: "Code structure mirrors business structure; rules live where they belong." },
       { icon: "grid", cat: "func", title: "Defines boundaries", desc: "Bounded contexts give objective service/module boundaries — not guesswork." },
       { icon: "book", cat: "sec", title: "Shared language", desc: "One vocabulary for experts, developers and code — fewer 'wrong thing built' errors." },
       { icon: "check", cat: "db", title: "Consistency boundaries", desc: "Aggregates say what must be transactional vs eventually consistent." },
