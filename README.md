@@ -30,7 +30,7 @@ This portal is deliberately built as a **zero-dependency, zero-build static web 
 - **Data-driven rendering engine.** Content is *not* hand-written HTML. Each section is a JavaScript object describing an array of typed **blocks**; a small renderer (`renderer.js`) turns blocks into HTML. This keeps all 46 sections visually consistent and makes editing content a matter of editing data, not markup.
 - **Custom lightweight syntax highlighter.** A regex-based tokenizer in `renderer.js` colours C#, SQL, JSON, TypeScript, HTTP and Bash snippets — no Prism/Highlight.js dependency.
 - **Theming.** Dark (default) and light themes via CSS variables; the choice is persisted in `localStorage`.
-- **Interactivity** (all vanilla JS, wired in `app.js`): clickable diagram nodes → slide-in **detail drawer**; an interactive **state machine**; an animated **"Play Flow"** sequence player; pill **tabs**, **accordions**, expandable **ADR** cards; copy-to-clipboard on code blocks; **auto-numbered** navigation; hash-based deep-linking; prev/next and a reading-progress bar.
+- **Interactivity** (all vanilla JS, wired in `app.js`): clickable diagram nodes → slide-in **detail drawer**; an interactive **state machine**; an animated **"Play Flow"** sequence player; pill **tabs**, **accordions**, expandable **ADR** cards; copy-to-clipboard on code blocks; a **section search box** (filters the nav live, `/` to focus, Enter to jump); **auto-numbered** navigation; hash-based deep-linking; prev/next and a reading-progress bar.
 - **Responsive.** Sidebar collapses to a slide-out drawer below 980px; grids reflow for tablet and mobile.
 - **Accessibility-minded.** Semantic landmarks (`header`, `main`, `aside`), keyboard-dismissible drawer (Esc), focus-friendly controls.
 

@@ -196,11 +196,52 @@
   $("#navToggle").addEventListener("click", () => { sidebar.classList.toggle("open"); scrim.classList.toggle("show"); });
   scrim.addEventListener("click", closeMobileNav);
 
+  // ---------- section search ----------
+  const search = $("#navSearch");
+  const noResults = $("#navNoResults");
+  function filterNav(raw) {
+    const q = (raw || "").trim().toLowerCase();
+    const items = $$(".nav-item", navList);
+    items.forEach((el) => {
+      const s = SECTIONS[+el.dataset.idx];
+      const hay = ((s.label || "") + " " + (s.title || "") + " " + (s.group || "") + " " + (s.kicker || "")).toLowerCase();
+      el.hidden = !!q && !hay.includes(q);
+    });
+    // hide group labels with no visible items
+    let lastLabel = null, labelHasVisible = false;
+    Array.prototype.forEach.call(navList.children, (ch) => {
+      if (ch.classList.contains("nav-group-label")) {
+        if (lastLabel) lastLabel.hidden = !labelHasVisible;
+        lastLabel = ch; labelHasVisible = false;
+      } else if (ch.classList.contains("nav-item") && !ch.hidden) {
+        labelHasVisible = true;
+      }
+    });
+    if (lastLabel) lastLabel.hidden = !labelHasVisible;
+    if (noResults) noResults.hidden = !q || items.some((el) => !el.hidden);
+  }
+  if (search) {
+    search.addEventListener("input", () => filterNav(search.value));
+    search.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        const first = $$(".nav-item", navList).find((el) => !el.hidden);
+        if (first) { go(+first.dataset.idx); closeMobileNav(); search.blur(); }
+      } else if (e.key === "Escape") {
+        search.value = ""; filterNav(""); search.blur();
+      }
+    });
+  }
+
   // keyboard nav
   document.addEventListener("keydown", (e) => {
-    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+    const typing = e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
+    // "/" focuses the section search from anywhere
+    if (e.key === "/" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault(); if (search) { sidebar.classList.add("open"); search.focus(); search.select(); }
+      return;
+    }
+    if (typing) return;
     if (e.key === "Escape") closeDrawer();
-    if (e.key === "ArrowRight" && !e.ctrlKey && !e.metaKey) { /* keep for future */ }
   });
 
   /* ---------- init ---------- */

@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="assets/css/theme.css?v=20260928e" />
-  <link rel="stylesheet" href="assets/css/components.css?v=20260928e" />
+  <link rel="stylesheet" href="assets/css/theme.css?v=20260928h" />
+  <link rel="stylesheet" href="assets/css/components.css?v=20260928h" />
 </head>
 <body>
   <!-- Top bar -->
@@ -37,6 +37,16 @@
     </div>
     <div class="topbar-spacer"></div>
     <div class="topbar-actions">
+      <div class="topbar-contact">
+        <span class="contact-name">Charan Tata</span>
+        <a class="icon-btn contact-link" href="https://www.linkedin.com/in/charan-tata-04b44739/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn — Charan Tata" title="LinkedIn — Charan Tata">
+          <svg viewBox="0 0 24 24" width="17" height="17"><path d="M4.98 3.5A2.5 2.5 0 112.5 6 2.5 2.5 0 014.98 3.5zM3 8.98h4V21H3zM9 8.98h3.8v1.64h.05a4.17 4.17 0 013.75-2.06C20.5 8.56 21 11 21 14.24V21h-4v-6c0-1.43-.03-3.27-2-3.27s-2.3 1.56-2.3 3.17V21H9z" fill="currentColor"/></svg>
+        </a>
+        <a class="contact-phone" href="tel:+919533366133" aria-label="Call +91 95333 66133" title="+91 95333 66133">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.6 10.8a15 15 0 006.6 6.6l2.2-2.2a1 1 0 011-.24 11.4 11.4 0 003.6.58 1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1 11.4 11.4 0 00.58 3.6 1 1 0 01-.24 1z" fill="currentColor"/></svg>
+          <span class="ph-num">+91 95333 66133</span>
+        </a>
+      </div>
       <span class="badge badge-live"><span class="dot"></span> Architecture Workshop</span>
       <button class="icon-btn" id="prevBtn" aria-label="Previous section" title="Previous">
         <svg viewBox="0 0 24 24" width="18" height="18"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -54,7 +64,15 @@
   <div class="layout">
     <!-- Sidebar navigation -->
     <aside class="sidebar" id="sidebar">
+      <div class="sidebar-search">
+        <div class="search-wrap">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.2-3.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <input id="navSearch" type="search" placeholder="Search sections…" aria-label="Search sections" autocomplete="off" spellcheck="false" />
+          <kbd class="search-kbd">/</kbd>
+        </div>
+      </div>
       <div class="sidebar-scroll" id="navList"><!-- injected --></div>
+      <div class="nav-no-results" id="navNoResults" hidden>No matching sections</div>
       <div class="sidebar-footer">
         <div class="progress-wrap">
           <div class="progress-bar" id="progressBar"></div>
@@ -95,15 +113,15 @@
   </aside>
 
   <!-- Scripts (classic scripts so it runs from file:// without a server) -->
-  <script src="assets/js/renderer.js?v=20260928e"></script>
-  <script src="assets/js/content/overview.js?v=20260928e"></script>
-  <script src="assets/js/content/architecture.js?v=20260928e"></script>
-  <script src="assets/js/content/data.js?v=20260928e"></script>
-  <script src="assets/js/content/patterns.js?v=20260928e"></script>
-  <script src="assets/js/content/messaging.js?v=20260928e"></script>
-  <script src="assets/js/content/integration.js?v=20260928e"></script>
-  <script src="assets/js/content/quality.js?v=20260928e"></script>
-  <script src="assets/js/content/delivery.js?v=20260928e"></script>
-  <script src="assets/js/app.js?v=20260928e"></script>
+  <script src="assets/js/renderer.js?v=20260928h"></script>
+  <script src="assets/js/content/overview.js?v=20260928h"></script>
+  <script src="assets/js/content/architecture.js?v=20260928h"></script>
+  <script src="assets/js/content/data.js?v=20260928h"></script>
+  <script src="assets/js/content/patterns.js?v=20260928h"></script>
+  <script src="assets/js/content/messaging.js?v=20260928h"></script>
+  <script src="assets/js/content/integration.js?v=20260928h"></script>
+  <script src="assets/js/content/quality.js?v=20260928h"></script>
+  <script src="assets/js/content/delivery.js?v=20260928h"></script>
+  <script src="assets/js/app.js?v=20260928h"></script>
 </body>
 </html>
