@@ -2,7 +2,7 @@
 
 A **client-facing Solution Architecture showcase portal**. It presents an enterprise-grade, event-driven, cloud-native **Assurance & Audit processing platform** the way a Principal Solution Architect would demonstrate it to CTOs, CIOs, Enterprise Architects and business stakeholders during a technical proposal or architecture workshop.
 
-It is a single, self-contained web app: open it in a browser and walk a client from **business problem → proposed architecture → why → how data flows → how failures are handled → how it scales → how it evolves**, across **42 interactive sections** with diagrams, sequence flows, code and design rationale.
+It is a single, self-contained web app: open it in a browser and walk a client from **business problem → proposed architecture → why → how data flows → how failures are handled → how it scales → how it evolves**, across **43 interactive sections** with diagrams, sequence flows, code and design rationale.
 
 > **Two different "stacks" in this project — don't confuse them:**
 > 1. **What the showcase app is built with** — plain HTML/CSS/JavaScript (this document, first section below).
@@ -27,7 +27,7 @@ This portal is deliberately built as a **zero-dependency, zero-build static web 
 
 ### Key architectural choices of the app
 
-- **Data-driven rendering engine.** Content is *not* hand-written HTML. Each section is a JavaScript object describing an array of typed **blocks**; a small renderer (`renderer.js`) turns blocks into HTML. This keeps all 42 sections visually consistent and makes editing content a matter of editing data, not markup.
+- **Data-driven rendering engine.** Content is *not* hand-written HTML. Each section is a JavaScript object describing an array of typed **blocks**; a small renderer (`renderer.js`) turns blocks into HTML. This keeps all 43 sections visually consistent and makes editing content a matter of editing data, not markup.
 - **Custom lightweight syntax highlighter.** A regex-based tokenizer in `renderer.js` colours C#, SQL, JSON, TypeScript, HTTP and Bash snippets — no Prism/Highlight.js dependency.
 - **Theming.** Dark (default) and light themes via CSS variables; the choice is persisted in `localStorage`.
 - **Interactivity** (all vanilla JS, wired in `app.js`): clickable diagram nodes → slide-in **detail drawer**; an interactive **state machine**; an animated **"Play Flow"** sequence player; pill **tabs**, **accordions**, expandable **ADR** cards; copy-to-clipboard on code blocks; **auto-numbered** navigation; hash-based deep-linking; prev/next and a reading-progress bar.
@@ -98,14 +98,14 @@ ArchitectureOverView/
             ├── messaging.js    # Sections 16–20  (incl. RabbitMQ)
             ├── integration.js  # Sections 21–25
             ├── quality.js      # Sections 26–33
-            └── delivery.js     # Sections 34–42
+            └── delivery.js     # Sections 34–43
 ```
 
 **Load order matters:** `index.html` loads the content files in the order above, and the left-nav groups appear in that order. Section numbers are assigned automatically from final position (see `app.js`), so inserting a new section never desyncs the badges.
 
 ---
 
-## 5. What's covered (all 42 sections)
+## 5. What's covered (all 43 sections)
 
 Organised into 7 navigation groups.
 
@@ -174,14 +174,15 @@ Organised into 7 navigation groups.
 | # | Section | What it covers |
 |---|---|---|
 | 34 | **API Catalog** | Endpoint catalogue with security, idempotency and correlation conventions; contract detail. |
-| 35 | **End-to-End Flow** | **Animated 11-step sequence player** ("Play / Step / Reset") of a full create-audit-and-pay transaction. |
-| 36 | **Architecture Decision Records** | 8 expandable ADRs (Service Bus, Saga, Outbox, SignalR, SQL/PG, Functions, Event Grid, CQRS) with context, decision, alternatives, consequences. |
-| 37 | **Sample Architectures** | Gallery of canonical patterns (layered, event-driven, saga, outbox, real-time, third-party, serverless, hybrid). |
-| 38 | **Microservices vs Monolith** | Modular monolith → microservices evolution and why a full rewrite is rarely needed. |
-| 39 | **Implementation Roadmap** | Indicative 10-phase delivery plan from Discovery to Production. |
-| 40 | **GitHub CI/CD & Deploy** | GitHub controls & automatic deployment: branch protection on main, required approvals/status checks, CI + CD **GitHub Actions** workflows, auto-deploy on merge to main, environment approval gates, passwordless **OIDC** deploy to Azure, and blue/green rollback. Includes the team's real in-use .NET pipeline (build/test → email → deploy to Azure VM IIS via WinRM). |
-| 41 | **Eight Industries, One Platform** | The same reference architecture applied to eight businesses — Pharmacy, Uber-like ride booking, Zomato-like food ordering, employee car-pooling, Zerodha-like trading, student loans, Amazon-like e-commerce, and BookMyShow-like ticketing. Shows the common edge/security/microservice platform (incl. CORS≠CSRF), the **multi-portal model** (customer + employee/admin portals per app via RBAC), the reusable CQRS+Outbox+Saga loop, and per-industry flows with **portals & personas** and a platform-mapping table (real-time channel, consistency, Redis, key services, saga + compensation, Boomi/scheduled). BookMyShow highlights **geo-based availability + seat-lock (no double-booking)**. |
-| 42 | **Why This Architecture** | Measurable outcomes, the end-to-end story recap, and the next step. |
+| 35 | **gRPC · GraphQL · OData** | API styles beyond REST: **gRPC** (contract-first RPC over HTTP/2 for internal calls — .proto, server/client, streaming), **GraphQL** (Hot Chocolate — client-driven queries, projections/filtering), and **OData** (queryable REST — `$filter`/`$orderby`/`$expand` over `IQueryable`), each with detailed C# code, the exact **NuGet packages** to add, and a when-to-use-which comparison. |
+| 36 | **End-to-End Flow** | **Animated 11-step sequence player** ("Play / Step / Reset") of a full create-audit-and-pay transaction. |
+| 37 | **Architecture Decision Records** | 8 expandable ADRs (Service Bus, Saga, Outbox, SignalR, SQL/PG, Functions, Event Grid, CQRS) with context, decision, alternatives, consequences. |
+| 38 | **Sample Architectures** | Gallery of canonical patterns (layered, event-driven, saga, outbox, real-time, third-party, serverless, hybrid). |
+| 39 | **Microservices vs Monolith** | Modular monolith → microservices evolution and why a full rewrite is rarely needed. |
+| 40 | **Implementation Roadmap** | Indicative 10-phase delivery plan from Discovery to Production. |
+| 41 | **GitHub CI/CD & Deploy** | GitHub controls & automatic deployment: branch protection on main, required approvals/status checks, CI + CD **GitHub Actions** workflows, auto-deploy on merge to main, environment approval gates, passwordless **OIDC** deploy to Azure, and blue/green rollback. Includes the team's real in-use .NET pipeline (build/test → email → deploy to Azure VM IIS via WinRM). |
+| 42 | **Eight Industries, One Platform** | The same reference architecture applied to eight businesses — Pharmacy, Uber-like ride booking, Zomato-like food ordering, employee car-pooling, Zerodha-like trading, student loans, Amazon-like e-commerce, and BookMyShow-like ticketing. Shows the common edge/security/microservice platform (incl. CORS≠CSRF), the **multi-portal model** (customer + employee/admin portals per app via RBAC), the reusable CQRS+Outbox+Saga loop, and per-industry flows with **portals & personas** and a platform-mapping table (real-time channel, consistency, Redis, key services, saga + compensation, Boomi/scheduled). BookMyShow highlights **geo-based availability + seat-lock (no double-booking)**. |
+| 43 | **Why This Architecture** | Measurable outcomes, the end-to-end story recap, and the next step. |
 
 ---
 

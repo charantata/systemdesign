@@ -124,6 +124,21 @@
       ["tk-key", "\\b(?:true|false|null|on|off|yes|no)\\b"],
       ["tk-num", "\\b\\d[\\d.]*\\b"],
     ],
+    proto: [
+      ["tk-com", "\\/\\/[^\\n]*"],
+      ["tk-str", "&quot;[\\s\\S]*?&quot;"],
+      ["tk-key", "\\b(?:syntax|package|import|option|service|rpc|returns|stream|message|enum|repeated|optional|map|reserved|oneof)\\b"],
+      ["tk-type", "\\b(?:int32|int64|uint32|uint64|sint32|sint64|string|bool|double|float|bytes|Timestamp|google)\\b"],
+      ["tk-fn", "\\b[A-Z][A-Za-z0-9_]*(?=\\s*\\()"],
+      ["tk-num", "\\b\\d[\\d.]*\\b"],
+    ],
+    graphql: [
+      ["tk-com", "#[^\\n]*"],
+      ["tk-str", "&quot;[\\s\\S]*?&quot;"],
+      ["tk-key", "\\b(?:type|query|mutation|subscription|input|enum|interface|scalar|schema|extend|implements|fragment|on|union|directive)\\b"],
+      ["tk-type", "\\b(?:Int|Float|String|Boolean|ID|DateTime|Decimal)\\b"],
+      ["tk-num", "\\b\\d[\\d.]*\\b"],
+    ],
     text: [],
   };
   const RX = {};

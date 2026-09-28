@@ -48,6 +48,98 @@ window.SECTIONS.push({
   ],
 });
 
+/* ---------- API styles: gRPC, GraphQL, OData ---------- */
+window.SECTIONS.push({
+  id: "api-styles", group: "Delivery", label: "gRPC · GraphQL · OData",
+  kicker: "API Styles", title: "gRPC, GraphQL & OData — beyond plain REST",
+  sub: "REST/JSON is the default public API, but three other styles solve specific problems: gRPC for fast internal service-to-service calls, GraphQL for flexible client-driven queries, and OData for standardized queryable REST. Here's how each works in C#, the exact NuGet packages to add, and when to reach for which.",
+  blocks: [
+    { type: "flow", title: "Where each style fits",
+      diagramTitle: "One gateway, several API styles",
+      legend: [ {cat:"client",label:"Client"},{cat:"api",label:"REST"},{cat:"app",label:"GraphQL"},{cat:"db",label:"OData"},{cat:"func",label:"gRPC (internal)"} ],
+      steps: [
+        { name: "Client", tech: "browser / mobile", icon: "user", cat: "client" },
+        { name: "API Gateway", tech: "authN/Z · TLS", icon: "gateway", cat: "api", edge: "HTTPS", detail: D.gateway },
+        { edge: "public / edge API styles", parallel: [
+          { name: "REST / JSON", tech: "default public API", icon: "api", cat: "api" },
+          { name: "GraphQL", tech: "client-driven queries", icon: "flow", cat: "app" },
+          { name: "OData", tech: "queryable REST", icon: "monitor", cat: "db" },
+        ]},
+        { name: "Microservices", tech: "handle the request", icon: "grid", cat: "api", edge: "" },
+        { name: "gRPC (internal)", tech: "service ↔ service · HTTP/2 · Protobuf", icon: "bolt", cat: "func", edge: "low-latency sync" },
+      ]},
+
+    { type: "tabs", title: "Each style in C#", tabs: [
+
+      { label: "gRPC", blocks: [
+        { type: "para", body: "<b>gRPC</b> is contract-first RPC over HTTP/2 using Protocol Buffers — compact, strongly-typed, streaming-capable. Ideal for <b>internal, synchronous, low-latency</b> service-to-service calls (e.g. Order service asking Pricing \"what's the price?\"). Not natively browser-callable — use gRPC-Web for that." },
+        { type: "featureList", title: "NuGet packages to add", items: [
+          "<code>Grpc.AspNetCore</code> — server hosting (bundles Grpc.Tools + Google.Protobuf)",
+          "<code>Grpc.Net.ClientFactory</code> — typed clients via DI + resilience",
+          "<code>Grpc.Tools</code> — <code>.proto</code> → C# code generation at build",
+          "<code>Grpc.AspNetCore.Web</code> — gRPC-Web (browser / Angular clients)",
+          "<code>Grpc.AspNetCore.Server.Reflection</code> — reflection for grpcurl / tooling",
+          "<code>protobuf-net.Grpc.AspNetCore</code> — optional <b>code-first</b> gRPC (no .proto)" ]},
+        { type: "code", lang: "proto", label: "Protos/pricing.proto", code:
+"syntax = \"proto3\";\noption csharp_namespace = \"Assurance.Pricing\";\n\nservice Pricing {\n  rpc GetPrice (PriceRequest) returns (PriceReply);\n  rpc StreamPrices (PriceRequest) returns (stream PriceReply); // server streaming\n}\n\nmessage PriceRequest { string sku = 1; }\nmessage PriceReply   { string sku = 1; double price = 2; }" },
+        { type: "code", lang: "bash", label: "Pricing.Api.csproj", code:
+"<ItemGroup>\n  <Protobuf Include=\"Protos/pricing.proto\" GrpcServices=\"Server\" />\n</ItemGroup>" },
+        { type: "code", lang: "csharp", label: "server", code:
+"// Program.cs\nbuilder.Services.AddGrpc();\napp.MapGrpcService<PricingService>();\n\n// PricingService.cs — implement the generated base class\npublic class PricingService : Pricing.PricingBase\n{\n    public override async Task<PriceReply> GetPrice(PriceRequest req, ServerCallContext ctx)\n        => new PriceReply { Sku = req.Sku, Price = await _engine.CalculateAsync(req.Sku, ctx.CancellationToken) };\n}" },
+        { type: "code", lang: "csharp", label: "typed client + resilience", code:
+"builder.Services\n    .AddGrpcClient<Pricing.PricingClient>(o => o.Address = new Uri(\"https://pricing\"))\n    .AddStandardResilienceHandler();   // retry, timeout, circuit breaker\n\n// usage\nvar reply = await _pricing.GetPriceAsync(new PriceRequest { Sku = sku },\n                deadline: DateTime.UtcNow.AddSeconds(2));   // always set a deadline" },
+        { type: "callout", kind: "ok", title: "Use it internally, with deadlines", body: "gRPC shines for chatty internal traffic. Always set a per-call <b>deadline</b> and wrap clients in a <b>circuit breaker</b> (a sync call is a coupling point). For browsers, enable <b>gRPC-Web</b>; for public APIs, stick to REST." },
+      ]},
+
+      { label: "GraphQL", blocks: [
+        { type: "para", body: "<b>GraphQL</b> lets the <i>client</i> ask for exactly the fields it needs in one round-trip — no over- or under-fetching. Great for a mobile app or a BFF aggregating several services. In .NET the standard is <b>Hot Chocolate</b>." },
+        { type: "featureList", title: "NuGet packages to add", items: [
+          "<code>HotChocolate.AspNetCore</code> — GraphQL server + the Nitro/Banana Cake Pop IDE",
+          "<code>HotChocolate.Data</code> — <code>$filter</code>/sort/paging + projections",
+          "<code>HotChocolate.Data.EntityFramework</code> — EF Core integration (projections push down to SQL)",
+          "<code>HotChocolate.AspNetCore.Authorization</code> — <code>[Authorize]</code> inside the schema" ]},
+        { type: "code", lang: "csharp", label: "Program.cs", code:
+"builder.Services\n    .AddGraphQLServer()\n    .AddQueryType<Query>()\n    .AddMutationType<Mutation>()\n    .AddProjections()      // select only requested columns\n    .AddFiltering()        // where(...) push-down\n    .AddSorting()\n    .AddAuthorization();\n\napp.MapGraphQL();          // POST /graphql  (+ IDE in dev)" },
+        { type: "code", lang: "csharp", label: "Query.cs — resolvers over IQueryable", code:
+"public class Query\n{\n    [UseProjection, UseFiltering, UseSorting]      // translated to efficient SQL by EF\n    public IQueryable<AuditTransaction> GetAuditTransactions([Service] AppDbContext db)\n        => db.AuditTransactions;\n\n    public Task<AuditTransaction?> GetAuditTransaction(Guid id, [Service] AppDbContext db)\n        => db.AuditTransactions.FirstOrDefaultAsync(x => x.Id == id);\n}" },
+        { type: "code", lang: "graphql", label: "a client query", code:
+"query {\n  auditTransactions(\n    where: { status: { eq: \"APPROVAL_REQUIRED\" } }\n    order: { createdDate: DESC }\n  ) {\n    transactionId\n    amount\n    payments { status amount }   # only the fields asked for, one round-trip\n  }\n}" },
+        { type: "callout", kind: "warn", title: "Watch complexity & caching", body: "GraphQL trades HTTP caching and simplicity for flexibility. Guard against abusive queries with <b>max depth / complexity limits</b> and persisted queries; be aware the N+1 problem needs <b>DataLoader</b>. Best as a BFF/aggregation layer, not a replacement for every REST endpoint." },
+      ]},
+
+      { label: "OData", blocks: [
+        { type: "para", body: "<b>OData</b> adds a <i>standardized query language</i> on top of REST — <code>$filter</code>, <code>$orderby</code>, <code>$select</code>, <code>$expand</code>, <code>$top</code>, <code>$count</code> — that the client composes in the URL and the server translates straight to SQL via <code>IQueryable</code>. Perfect for admin/reporting grids over EF entities." },
+        { type: "featureList", title: "NuGet packages to add", items: [
+          "<code>Microsoft.AspNetCore.OData</code> — OData v4 routing + query options for ASP.NET Core" ]},
+        { type: "code", lang: "csharp", label: "Program.cs", code:
+"var edm = new ODataConventionModelBuilder();\nedm.EntitySet<AuditTransaction>(\"AuditTransactions\");\n\nbuilder.Services.AddControllers().AddOData(opt => opt\n    .Select().Filter().OrderBy().Expand().Count()\n    .SetMaxTop(100)                                   // cap page size\n    .AddRouteComponents(\"odata\", edm.GetEdmModel()));" },
+        { type: "code", lang: "csharp", label: "controller", code:
+"public class AuditTransactionsController : ODataController\n{\n    private readonly AppDbContext _db;\n    public AuditTransactionsController(AppDbContext db) => _db = db;\n\n    [EnableQuery(MaxExpansionDepth = 2)]   // applies $filter/$orderby/$select/$expand to IQueryable\n    public IQueryable<AuditTransaction> Get() => _db.AuditTransactions;\n}" },
+        { type: "code", lang: "http", label: "example requests", code:
+"GET /odata/AuditTransactions?$filter=Status eq 'APPROVED' and Amount gt 1000\nGET /odata/AuditTransactions?$orderby=CreatedDate desc&$top=20&$count=true\nGET /odata/AuditTransactions?$select=Id,TransactionId,Amount&$expand=Payments\nGET /odata/AuditTransactions?$filter=year(CreatedDate) eq 2026" },
+        { type: "callout", kind: "warn", title: "Powerful — so put guardrails on it", body: "OData exposes your data model directly, so cap it: <code>SetMaxTop</code>, limit <code>$expand</code> depth, and only enable the options you want. It's ideal for internal/reporting surfaces; for public APIs prefer curated REST or GraphQL so clients aren't coupled to your schema." },
+      ]},
+
+      { label: "When to use which", blocks: [
+        { type: "table", head: ["Style", "Best for", "Transport / shape", "Trade-off"], rows: [
+          ["<b>REST / JSON</b>", "Public & browser APIs (the default)", "HTTP/1.1 · JSON · cacheable", "Over/under-fetching; many endpoints"],
+          ["<b>gRPC</b>", "Internal service-to-service, streaming", "HTTP/2 · Protobuf (binary)", "Not browser-native; binary is harder to debug"],
+          ["<b>GraphQL</b>", "Client-driven queries, BFF/aggregation", "HTTP · one flexible endpoint", "Caching & query-complexity management"],
+          ["<b>OData</b>", "Queryable REST for grids/reporting", "HTTP · REST + query params", "Couples clients to the data model"],
+        ]},
+        { type: "callout", kind: "ok", title: "They coexist", body: "This platform uses <b>REST</b> at the edge (see API Catalog), <b>gRPC</b> for internal sync calls, and can expose <b>GraphQL</b> (BFF/aggregation) or <b>OData</b> (reporting grids) where they earn their place. Pick per use case — not one style for everything." },
+      ]},
+
+    ]},
+
+    { type: "table", title: "Extensions to add over C# — quick reference", head: ["Style", "NuGet packages"], rows: [
+      ["gRPC", "<code>Grpc.AspNetCore</code>, <code>Grpc.Net.ClientFactory</code>, <code>Grpc.Tools</code>, <code>Google.Protobuf</code>, <code>Grpc.AspNetCore.Web</code>, <code>Grpc.AspNetCore.Server.Reflection</code>, <code>protobuf-net.Grpc.AspNetCore</code> (code-first)"],
+      ["GraphQL", "<code>HotChocolate.AspNetCore</code>, <code>HotChocolate.Data</code>, <code>HotChocolate.Data.EntityFramework</code>, <code>HotChocolate.AspNetCore.Authorization</code>"],
+      ["OData", "<code>Microsoft.AspNetCore.OData</code>"],
+    ]},
+  ],
+});
+
 /* ---------- 25 End-to-End Flow (animated) ---------- */
 window.SECTIONS.push({
   id: "e2e", num: "25", group: "Delivery", label: "End-to-End Flow",
@@ -738,7 +830,7 @@ window.SECTIONS.push({
         "<b>Third parties</b> → KyrePay, webhooks, isolation",
         "<b>How it evolves</b> → modular monolith → microservices" ]},
       { type: "kpis", cols: 2, items: [
-        { val: "42", label: "Architecture sections", note: "in this showcase" },
+        { val: "43", label: "Architecture sections", note: "in this showcase" },
         { val: "8", label: "ADRs documented", note: "decisions with rationale" },
         { val: "18+", label: "Design patterns", note: "applied deliberately" },
         { val: "10", label: "Delivery phases", note: "indicative roadmap" },
