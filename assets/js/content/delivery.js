@@ -484,6 +484,99 @@ window.SECTIONS.push({
   ],
 });
 
+/* ---------- Docker, Kubernetes & Load Balancing ---------- */
+window.SECTIONS.push({
+  id: "containers", group: "Delivery", label: "Docker · Kubernetes · Load Balancing",
+  kicker: "Containers & Runtime", title: "Docker, Kubernetes & load balancing",
+  sub: "What the CI/CD pipeline actually ships to: containerised services running on Kubernetes behind layered load balancers. This page covers the Docker image, the Kubernetes objects (Deployment, Service, Ingress, HPA, probes), the load-balancing tiers and algorithms, and deployment strategies (rolling, blue-green, canary).",
+  blocks: [
+    { type: "flow", title: "Request path — global edge to a pod",
+      diagramTitle: "Front Door → App Gateway → Ingress → Service → Pods",
+      legend: [ {cat:"client",label:"Edge"},{cat:"sec",label:"L7 + WAF"},{cat:"api",label:"Cluster"},{cat:"app",label:"Pods"} ],
+      steps: [
+        { name: "Internet", tech: "clients", icon: "globe", cat: "client" },
+        { name: "Azure Front Door", tech: "global L7 · CDN · TLS", icon: "cloud", cat: "client", edge: "anycast" },
+        { name: "App Gateway / WAF", tech: "regional L7 load balancer", icon: "shield", cat: "sec", edge: "OWASP filter" },
+        { name: "Ingress Controller", tech: "NGINX / AGIC — routing & TLS", icon: "gateway", cat: "api", edge: "host/path rules" },
+        { name: "Kubernetes Service", tech: "ClusterIP · L4 balance across pods", icon: "flow", cat: "api", edge: "load balance" },
+        { edge: "replicas (HPA scales)", parallel: [
+          { name: "Pod 1", tech: "audit-api", icon: "cog", cat: "app" },
+          { name: "Pod 2", tech: "audit-api", icon: "cog", cat: "app" },
+          { name: "Pod N", tech: "audit-api", icon: "cog", cat: "app" },
+        ]},
+      ]},
+
+    { type: "tabs", title: "From image to running cluster", tabs: [
+
+      { label: "Docker", blocks: [
+        { type: "para", body: "Package the .NET service into a small, secure image with a <b>multi-stage</b> build — SDK builds it, the slim ASP.NET runtime ships it, running as a <b>non-root</b> user." },
+        { type: "code", lang: "bash", label: "Dockerfile", code:
+"# --- build stage ---\nFROM mcr.microsoft.com/dotnet/sdk:8.0 AS build\nWORKDIR /src\nCOPY *.sln .\nCOPY src/ ./src/\nRUN dotnet restore\nRUN dotnet publish src/Audit.Api -c Release -o /app --no-restore\n\n# --- runtime stage (small, hardened) ---\nFROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final\nWORKDIR /app\nRUN adduser --disabled-password --gecos \"\" appuser\nUSER appuser                       # never run as root\nCOPY --from=build /app .\nENV ASPNETCORE_URLS=http://+:8080\nEXPOSE 8080\nENTRYPOINT [\"dotnet\", \"Audit.Api.dll\"]" },
+        { type: "featureList", title: "Image best practices", variant: "pros", items: [
+          "<b>Multi-stage</b> build — SDK stays out of the final image",
+          "Slim runtime base (or <code>-alpine</code>/<code>chiseled</code>) — smaller & fewer CVEs",
+          "Run as a <b>non-root</b> user; read-only filesystem where possible",
+          "Order layers by change frequency (restore before copy) for cache hits",
+          "Pin versions & scan images (Trivy / Defender) in CI" ]},
+        { type: "code", lang: "yaml", label: "docker-compose.yml (local dev)", code:
+"services:\n  audit-api:\n    build: .\n    ports: [\"8080:8080\"]\n    depends_on: [sql, redis, rabbitmq]\n    environment:\n      ConnectionStrings__Db: \"Server=sql;Database=Assurance;User Id=sa;Password=${SA_PASS};TrustServerCertificate=true\"\n  sql:\n    image: mcr.microsoft.com/mssql/server:2022-latest\n    environment: { ACCEPT_EULA: \"Y\", SA_PASSWORD: \"${SA_PASS}\" }\n  redis:    { image: redis:7 }\n  rabbitmq: { image: rabbitmq:3-management }" },
+      ]},
+
+      { label: "Kubernetes", blocks: [
+        { type: "para", body: "Kubernetes runs the containers, keeps the desired number of replicas alive, does rolling updates, and self-heals. The core objects:" },
+        { type: "table", title: "Core Kubernetes objects", head: ["Object", "Role"], rows: [
+          ["<b>Deployment</b>", "Desired replicas + rolling-update strategy for a stateless app"],
+          ["<b>Service</b>", "Stable virtual IP; L4 load-balances across the pods"],
+          ["<b>Ingress</b>", "L7 host/path routing + TLS into the cluster"],
+          ["<b>ConfigMap / Secret</b>", "Config & secrets injected as env/volumes (Secrets from Key Vault via CSI)"],
+          ["<b>HPA</b>", "Horizontal Pod Autoscaler — scale pods on CPU/custom metrics"],
+          ["<b>Probes</b>", "liveness / readiness / startup health checks"],
+        ]},
+        { type: "code", lang: "yaml", label: "deployment.yaml", code:
+"apiVersion: apps/v1\nkind: Deployment\nmetadata: { name: audit-api }\nspec:\n  replicas: 3\n  selector: { matchLabels: { app: audit-api } }\n  strategy:\n    type: RollingUpdate\n    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }   # zero-downtime\n  template:\n    metadata: { labels: { app: audit-api } }\n    spec:\n      containers:\n        - name: audit-api\n          image: acr.azurecr.io/audit-api:1.4.0\n          ports: [{ containerPort: 8080 }]\n          resources:\n            requests: { cpu: \"250m\", memory: \"256Mi\" }   # scheduler guarantee\n            limits:   { cpu: \"1\",    memory: \"512Mi\" }   # hard cap\n          readinessProbe:                                  # ready to serve?\n            httpGet: { path: /health/ready, port: 8080 }\n            initialDelaySeconds: 5\n            periodSeconds: 10\n          livenessProbe:                                   # restart if dead\n            httpGet: { path: /health/live, port: 8080 }\n            periodSeconds: 15\n          envFrom:\n            - configMapRef: { name: audit-config }\n            - secretRef:    { name: audit-secrets }" },
+        { type: "code", lang: "yaml", label: "service.yaml + ingress.yaml", code:
+"apiVersion: v1\nkind: Service\nmetadata: { name: audit-api }\nspec:\n  selector: { app: audit-api }\n  ports: [{ port: 80, targetPort: 8080 }]\n  type: ClusterIP            # internal; Ingress exposes it externally\n---\napiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: audit-ingress\n  annotations: { cert-manager.io/cluster-issuer: letsencrypt }\nspec:\n  ingressClassName: nginx\n  tls: [{ hosts: [api.assurance.example], secretName: audit-tls }]\n  rules:\n    - host: api.assurance.example\n      http:\n        paths:\n          - path: /audit\n            pathType: Prefix\n            backend: { service: { name: audit-api, port: { number: 80 } } }" },
+        { type: "code", lang: "yaml", label: "hpa.yaml — autoscale on CPU", code:
+"apiVersion: autoscaling/v2\nkind: HorizontalPodAutoscaler\nmetadata: { name: audit-api }\nspec:\n  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: audit-api }\n  minReplicas: 3\n  maxReplicas: 30\n  metrics:\n    - type: Resource\n      resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }" },
+        { type: "callout", kind: "info", title: "Scale pods and nodes", body: "The <b>HPA</b> adds/removes <i>pods</i> on CPU or custom metrics; the <b>Cluster Autoscaler</b> adds/removes <i>nodes</i> when pods can't be scheduled. For queue-driven consumers, <b>KEDA</b> scales pods on Service Bus / RabbitMQ backlog (see Scaling for Max Load). Secrets come from <b>Key Vault via the CSI driver</b> using the pod's managed identity — no secrets in manifests." },
+      ]},
+
+      { label: "Load balancing", blocks: [
+        { type: "para", body: "Traffic is balanced at several tiers. Know the difference between <b>L4</b> (transport — routes by IP/port, fast, protocol-agnostic) and <b>L7</b> (application — routes by host/path/header, can do TLS, WAF, sticky sessions)." },
+        { type: "table", title: "Load-balancing tiers used here", head: ["Tier", "Layer", "What it does"], rows: [
+          ["<b>Azure Front Door</b>", "L7 (global)", "Anycast global entry, CDN, TLS, failover across regions"],
+          ["<b>Application Gateway</b>", "L7 (regional)", "Path/host routing + <b>WAF</b>; TLS termination"],
+          ["<b>Ingress Controller</b> (NGINX/AGIC)", "L7 (cluster)", "Route into the cluster by host/path; TLS"],
+          ["<b>Kubernetes Service</b>", "L4 (cluster)", "Balance across healthy pods (kube-proxy)"],
+          ["<b>Azure Load Balancer</b>", "L4", "Fast transport-level balancing (behind AKS LB services)"],
+        ]},
+        { type: "table", title: "Balancing algorithms (techniques)", head: ["Algorithm", "How it picks a target", "Good for"], rows: [
+          ["<b>Round robin</b>", "Next server in rotation", "Uniform, stateless backends (default)"],
+          ["<b>Least connections</b>", "Fewest active connections", "Uneven / long-lived requests"],
+          ["<b>Least response time</b>", "Fastest responder", "Latency-sensitive traffic"],
+          ["<b>Weighted</b>", "Proportional to capacity/weight", "Mixed instance sizes; canary splits"],
+          ["<b>IP hash / consistent hash</b>", "Hash of client IP/key", "Session affinity without shared state"],
+        ]},
+        { type: "callout", kind: "ok", title: "Stateless first — then you rarely need sticky sessions", body: "Because the APIs are <b>stateless</b> (session/state in Redis or the JWT), any pod can serve any request — so plain round-robin works and rolling updates are safe. If you must pin a client (e.g. legacy in-memory state), use <b>session affinity</b> (cookie- or client-IP-based) on the Ingress/App Gateway — but treat it as a smell, not a default. For advanced traffic control (canary %, mTLS, retries at the mesh) add a <b>service mesh</b> (Istio / Linkerd)." },
+      ]},
+
+      { label: "Deployment strategies", blocks: [
+        { type: "table", title: "Rollout strategies", head: ["Strategy", "How", "Trade-off"], rows: [
+          ["<b>Rolling</b> (default)", "Replace pods gradually (<code>maxSurge/maxUnavailable</code>)", "Zero-downtime; brief mixed-version window"],
+          ["<b>Blue-green</b>", "Stand up v2 alongside v1, switch traffic at the LB", "Instant rollback; double the resources briefly"],
+          ["<b>Canary</b>", "Send a small % to v2, ramp up if healthy", "Safest for risky changes; needs weighted routing/mesh"],
+          ["<b>Recreate</b>", "Stop v1, start v2", "Simple but causes downtime — avoid for APIs"],
+        ]},
+        { type: "code", lang: "bash", label: "typical deploy flow (from CI/CD)", code:
+"# CI builds & pushes the image, then the pipeline rolls it out\ndocker build -t acr.azurecr.io/audit-api:1.4.0 .\ndocker push acr.azurecr.io/audit-api:1.4.0\n\nkubectl set image deploy/audit-api audit-api=acr.azurecr.io/audit-api:1.4.0\nkubectl rollout status deploy/audit-api        # wait for healthy\nkubectl rollout undo   deploy/audit-api        # instant rollback if needed" },
+        { type: "callout", kind: "info", title: "Ties into the pipeline", body: "The <b>GitHub CI/CD & Deploy</b> pipeline builds and pushes the image, then applies the manifests (or a Helm chart) with a <b>rolling</b> (or blue-green) strategy behind an environment approval gate. Health probes gate the rollout; a failed readiness check stops it automatically." },
+      ]},
+
+    ]},
+    { type: "callout", kind: "ok", title: "How it fits the platform", body: "Containers make every service portable and identical across dev, staging and prod; Kubernetes gives self-healing, rolling updates and autoscaling; layered load balancers (Front Door → App Gateway → Ingress → Service) route and protect traffic down to healthy pods. Together they deliver the <b>high availability</b> and <b>horizontal scale</b> the NFRs demand — see <b>Physical Deployment</b>, <b>Scalability</b> and <b>Scaling for Max Load</b>." },
+  ],
+});
+
 /* ---------- Six Industries, One Platform ---------- */
 window.SECTIONS.push({
   id: "industries", group: "Delivery", label: "Eight Industries, One Platform",
@@ -830,7 +923,7 @@ window.SECTIONS.push({
         "<b>Third parties</b> → KyrePay, webhooks, isolation",
         "<b>How it evolves</b> → modular monolith → microservices" ]},
       { type: "kpis", cols: 2, items: [
-        { val: "43", label: "Architecture sections", note: "in this showcase" },
+        { val: "44", label: "Architecture sections", note: "in this showcase" },
         { val: "8", label: "ADRs documented", note: "decisions with rationale" },
         { val: "18+", label: "Design patterns", note: "applied deliberately" },
         { val: "10", label: "Delivery phases", note: "indicative roadmap" },
