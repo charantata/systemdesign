@@ -334,3 +334,152 @@ window.SECTIONS.push({
     ]},
   ],
 });
+
+/* ---------- Redis Caching Strategies & Patterns ---------- */
+window.SECTIONS.push({
+  id: "redis-caching", group: "Data & Persistence", label: "Redis Caching Patterns",
+  kicker: "Caching Deep-Dive", title: "Redis caching strategies & patterns",
+  sub: "Caching is easy to add and easy to get wrong. This page covers the five caching patterns and when to use each, the Redis data structures behind them, .NET integration (IDistributedCache, HybridCache), defending against cache stampedes, invalidation, eviction policies, and deployment topologies.",
+  blocks: [
+    { type: "callout", kind: "info", title: "Redis is a cache, not the system of record", body: "Everything here treats Redis as a <b>fast, rebuildable copy</b> of data whose source of truth is the database. Every cache entry needs a <b>TTL</b> and an <b>invalidation story</b>; a cache miss must always be safe to serve from the DB. (For how the read model stays in sync in CQRS, see <b>Redis &amp; CQRS Sync</b>.)" },
+    { type: "caps", title: "The five caching patterns", cols: 5, items: [
+      { icon: "cache", cat: "mon", title: "Cache-aside", desc: "App checks cache, loads DB on miss, populates. The default." },
+      { icon: "flow", cat: "app", title: "Read-through", desc: "The cache layer loads from the DB on miss." },
+      { icon: "check", cat: "db", title: "Write-through", desc: "Write cache + DB together, synchronously." },
+      { icon: "retry", cat: "ext", title: "Write-behind", desc: "Write cache now, flush to DB asynchronously." },
+      { icon: "bolt", cat: "app", title: "Refresh-ahead", desc: "Proactively refresh hot keys before they expire." },
+    ]},
+
+    { type: "tabs", title: "Patterns, structures & integration", tabs: [
+
+      { label: "Caching patterns", blocks: [
+        { type: "table", title: "Which pattern, when", head: ["Pattern", "Who loads the DB", "Write path", "Trade-off"], rows: [
+          ["<b>Cache-aside</b>", "The application, on miss", "Write DB, then invalidate/refresh cache", "Simple, resilient; first read is a miss (default choice)"],
+          ["<b>Read-through</b>", "The cache provider, on miss", "Via the provider", "Clean read code; needs a provider that supports it"],
+          ["<b>Write-through</b>", "n/a (always warm)", "Write cache + DB synchronously", "Cache always fresh; slower writes"],
+          ["<b>Write-behind</b>", "n/a", "Write cache, async batch to DB", "Fast writes; risk of loss if cache dies before flush"],
+          ["<b>Refresh-ahead</b>", "Background, before expiry", "—", "Low read latency on hot keys; wasted work on cold ones"],
+        ]},
+        { type: "code", lang: "csharp", label: "Cache-aside (read)", code:
+"public async Task<ProductDto?> GetAsync(string id, CancellationToken ct)\n{\n    var key = $\"product:{id}\";\n    var cached = await _redis.StringGetAsync(key);\n    if (cached.HasValue)                                   // HIT\n        return JsonSerializer.Deserialize<ProductDto>(cached!);\n\n    var dto = await _db.LoadAsync(id, ct);                 // MISS -> DB\n    if (dto is not null)\n        await _redis.StringSetAsync(key, JsonSerializer.Serialize(dto),\n            TimeSpan.FromMinutes(10));                     // populate + TTL\n    return dto;\n}" },
+        { type: "code", lang: "csharp", label: "Write-through (keep cache fresh on write)", code:
+"public async Task UpdateAsync(ProductDto p, CancellationToken ct)\n{\n    await _db.SaveAsync(p, ct);                            // 1) source of truth\n    await _redis.StringSetAsync($\"product:{p.Id}\",         // 2) cache in the same op\n        JsonSerializer.Serialize(p), TimeSpan.FromMinutes(10));\n}\n\n// Write-behind: enqueue and flush asynchronously (fast writes, eventual DB)\n//   await _redis.StringSetAsync(key, value);   // immediate\n//   _writeQueue.Enqueue(p);                     // background worker persists to DB" },
+        { type: "callout", kind: "ok", title: "Default to cache-aside", body: "Cache-aside is the workhorse: the cache never sits in the write path, a broker/cache outage only slows reads (never loses writes), and it's trivial to reason about. Reach for write-through when a key must always be warm, and write-behind only when write latency truly dominates and you can tolerate a small loss window." },
+      ]},
+
+      { label: "Data structures", blocks: [
+        { type: "para", body: "Redis is more than a string store — picking the right structure makes caches smaller and operations atomic." },
+        { type: "table", head: ["Type", "Commands", "Caching use"], rows: [
+          ["<b>String</b>", "<code>GET/SET/INCR</code>", "Serialized objects, counters, simple values"],
+          ["<b>Hash</b>", "<code>HSET/HGET</code>", "Object with independently-updatable fields"],
+          ["<b>Sorted Set</b>", "<code>ZADD/ZRANGE</code>", "Leaderboards, rankings, rate/time windows"],
+          ["<b>Set</b>", "<code>SADD/SISMEMBER</code>", "Tags, membership, uniqueness"],
+          ["<b>List</b>", "<code>LPUSH/LRANGE</code>", "Recent-items, simple queues"],
+          ["<b>Bitmap</b>", "<code>SETBIT/BITCOUNT</code>", "Feature flags, daily-active presence"],
+          ["<b>HyperLogLog</b>", "<code>PFADD/PFCOUNT</code>", "Approximate unique counts (tiny memory)"],
+          ["<b>Stream</b>", "<code>XADD/XREAD</code>", "Append-only event log / lightweight queue"],
+        ]},
+        { type: "code", lang: "csharp", label: "hash + sorted set examples", code:
+"// Hash: cache an object, update one field without rewriting the whole blob\nawait _redis.HashSetAsync(\"product:42\", new HashEntry[]{ new(\"price\", 19.99), new(\"stock\", 120) });\nvar price = await _redis.HashGetAsync(\"product:42\", \"price\");\n\n// Sorted set: a top-sellers leaderboard\nawait _redis.SortedSetIncrementAsync(\"sales:today\", \"product:42\", 1);\nvar top10 = await _redis.SortedSetRangeByRankWithScoresAsync(\n    \"sales:today\", 0, 9, Order.Descending);" },
+      ]},
+
+      { label: ".NET integration", blocks: [
+        { type: "para", body: "In .NET, use the <b>connection multiplexer as a singleton</b>, then layer higher-level caching APIs on top." },
+        { type: "code", lang: "csharp", label: "Program.cs — registration", code:
+"// Low-level client (thread-safe, expensive to create) -> SINGLETON\nbuilder.Services.AddSingleton<IConnectionMultiplexer>(_ =>\n    ConnectionMultiplexer.Connect(cfg[\"Redis:ConnectionString\"]!));\n\n// IDistributedCache backed by Redis\nbuilder.Services.AddStackExchangeRedisCache(o => o.Configuration = cfg[\"Redis:ConnectionString\"]);\n\n// Output caching with Redis (cache whole responses)\nbuilder.Services.AddStackExchangeRedisOutputCache(o => o.Configuration = cfg[\"Redis:ConnectionString\"]);\n\n// HybridCache (.NET 9): L1 in-memory + L2 Redis, stampede-safe, tag invalidation\nbuilder.Services.AddHybridCache();" },
+        { type: "code", lang: "csharp", label: "HybridCache — L1+L2, one call", code:
+"public Task<ProductDto?> GetAsync(string id, CancellationToken ct) =>\n    _cache.GetOrCreateAsync(\n        $\"product:{id}\",\n        async token => await _db.LoadAsync(id, token),      // only runs on a miss\n        new HybridCacheEntryOptions { Expiration = TimeSpan.FromMinutes(10) },\n        tags: new[] { \"products\" },\n        cancellationToken: ct);\n\n// Invalidate everything tagged 'products' in one call\nawait _cache.RemoveByTagAsync(\"products\", ct);" },
+        { type: "callout", kind: "ok", title: "Prefer HybridCache for new code", body: "<b>HybridCache</b> (.NET 9) combines a fast in-process L1 with a shared Redis L2, and gives you <b>built-in stampede protection</b> (request coalescing) and <b>tag-based invalidation</b> out of the box — removing most hand-rolled cache-aside boilerplate. Register a Redis <code>IDistributedCache</code> and it becomes the L2 automatically." },
+      ]},
+
+      { label: "Stampede & invalidation", blocks: [
+        { type: "para", body: "A <b>cache stampede</b> (thundering herd): a hot key expires and thousands of concurrent misses hammer the database at once. Defend it:" },
+        { type: "table", title: "Stampede defences", head: ["Technique", "How"], rows: [
+          ["<b>Request coalescing</b>", "One caller rebuilds; others await the same task (HybridCache does this)"],
+          ["<b>Distributed lock</b>", "<code>SET key val NX PX ttl</code> — only the lock holder rebuilds"],
+          ["<b>Jittered TTL</b>", "Randomise expiry so keys don't all expire together"],
+          ["<b>Stale-while-revalidate</b>", "Serve stale value while refreshing in the background"],
+          ["<b>Cache warming</b>", "Pre-populate hot keys on deploy / on a schedule"],
+        ]},
+        { type: "table", title: "Invalidation strategies", head: ["Strategy", "How", "Best for"], rows: [
+          ["<b>TTL expiry</b>", "Every key has a max age", "The safety-net baseline"],
+          ["<b>Event-driven</b>", "Publish on write → evict/refresh the key", "Accurate, timely freshness"],
+          ["<b>Versioned keys</b>", "Embed a version: <code>product:v3:42</code>", "Atomic bulk swap; avoids races"],
+          ["<b>Tag-based</b>", "Group keys by tag, evict by tag", "Invalidate a whole category at once"],
+        ]},
+        { type: "code", lang: "csharp", label: "lock to prevent stampede", code:
+"var key = $\"report:{id}\";\nvar cached = await _redis.StringGetAsync(key);\nif (cached.HasValue) return Deserialize(cached);\n\nvar lockKey = $\"{key}:lock\";\nif (await _redis.StringSetAsync(lockKey, \"1\", TimeSpan.FromSeconds(10), When.NotExists))\n{\n    try   { var v = await _db.BuildExpensiveReportAsync(id);\n            await _redis.StringSetAsync(key, Serialize(v), Jitter(TimeSpan.FromMinutes(10)));\n            return v; }\n    finally { await _redis.KeyDeleteAsync(lockKey); }\n}\nawait Task.Delay(100);                 // someone else is rebuilding; brief wait + retry\nreturn await GetAsync(id);" },
+      ]},
+
+      { label: "Eviction & topology", blocks: [
+        { type: "table", title: "Eviction policies (maxmemory-policy)", head: ["Policy", "Behaviour"], rows: [
+          ["<code>noeviction</code>", "Reject writes when memory is full (safe default for a store)"],
+          ["<code>allkeys-lru</code>", "Evict least-recently-used across all keys — good general cache"],
+          ["<code>allkeys-lfu</code>", "Evict least-frequently-used — better for skewed hot sets"],
+          ["<code>volatile-lru / -lfu / -ttl</code>", "Evict only keys that have a TTL set"],
+          ["<code>allkeys-random</code>", "Evict at random — rarely ideal"],
+        ]},
+        { type: "table", title: "Deployment topologies", head: ["Topology", "Gives you"], rows: [
+          ["<b>Standalone</b>", "Single node — dev / simple use"],
+          ["<b>Primary + replicas</b>", "Read scale-out + HA (replicas serve reads)"],
+          ["<b>Sentinel</b>", "Automatic failover / monitoring for primary-replica"],
+          ["<b>Cluster</b>", "Horizontal sharding across nodes via hash slots"],
+          ["<b>Azure Cache for Redis</b>", "Managed: Standard (replica), Premium (cluster, persistence, VNet), Enterprise (active geo-replication)"],
+        ]},
+        { type: "callout", kind: "warn", title: "Operational gotchas", body: "Redis is <b>single-threaded per shard</b> — never run <code>KEYS *</code> in production (use <code>SCAN</code>), and keep values small (a giant value blocks everyone). Beware <b>hot keys</b> concentrating load on one shard; mitigate with client-side caching (HybridCache L1), key hashing, or replicas. Size <code>maxmemory</code> with headroom and pick an eviction policy deliberately." },
+      ]},
+
+      { label: "Failure & HA", blocks: [
+        { type: "callout", kind: "ok", title: "Golden rule: a cache outage must never be an app outage", body: "Because caching is <b>cache-aside</b>, if Redis is unreachable the code simply <b>falls through to the database</b> — slower, but fully functional. The job is to (1) survive a Redis outage gracefully, (2) recover automatically via replicas/failover, and (3) not hammer a dead Redis while it heals." },
+        { type: "flow", title: "What happens when the primary fails",
+          diagramTitle: "Replication, automatic failover & DB fallback",
+          legend: [ {cat:"app",label:"App"},{cat:"mon",label:"Primary"},{cat:"db",label:"Replica / DB"},{cat:"sec",label:"Failover"} ],
+          steps: [
+            { name: "Application", tech: "cache-aside client", icon: "cog", cat: "app" },
+            { name: "Redis Primary", tech: "reads + writes", icon: "cache", cat: "mon", edge: "connect" },
+            { edge: "continuous async replication", parallel: [
+              { name: "Replica 1", tech: "read-only copy", icon: "cache", cat: "db" },
+              { name: "Replica 2", tech: "read-only copy", icon: "cache", cat: "db" },
+            ]},
+            { name: "Sentinel / Cluster", tech: "health-check → promote a replica", icon: "shield", cat: "sec", edge: "on primary failure" },
+            { name: "Database (fallback)", tech: "source of truth", icon: "db", cat: "db", edge: "if Redis unreachable → serve from DB" },
+          ]},
+        { type: "code", title: "1) Resilient connection (survive a down/rebooting Redis)", lang: "csharp", label: "Program.cs", code:
+"var options = ConfigurationOptions.Parse(cfg[\"Redis:ConnectionString\"]!);\noptions.AbortOnConnectFail  = false;   // don't throw at startup if Redis is down\noptions.ConnectRetry        = 5;\noptions.ConnectTimeout      = 5000;\noptions.KeepAlive           = 60;\noptions.ReconnectRetryPolicy = new ExponentialRetry(5000); // auto-reconnect w/ backoff\n// HA endpoints: list every node / the Sentinel or cluster endpoint\n// options.EndPoints.Add(\"redis-1:6379\"); options.EndPoints.Add(\"redis-2:6379\");\n\nbuilder.Services.AddSingleton<IConnectionMultiplexer>(_ =>\n    ConnectionMultiplexer.Connect(options));   // multiplexer auto-reconnects on recovery" },
+        { type: "code", title: "2) Graceful fallback — degrade to the database", lang: "csharp", label: "ResilientCache.cs", code:
+"public async Task<ProductDto?> GetAsync(string id, CancellationToken ct)\n{\n    var key = $\"product:{id}\";\n    try\n    {\n        if (_breaker.IsOpen)                                   // Redis known-down: skip it\n            return await _db.LoadAsync(id, ct);\n\n        var db = _redis.GetDatabase();\n        var cached = await db.StringGetAsync(key);\n        if (cached.HasValue) return Deserialize(cached);       // HIT\n\n        var dto = await _db.LoadAsync(id, ct);                  // MISS\n        if (dto is not null)\n            await db.StringSetAsync(key, Serialize(dto), TtlWithJitter());\n        return dto;\n    }\n    catch (RedisConnectionException ex)                        // Redis unreachable\n    {\n        _breaker.Trip();                                       // stop calling Redis briefly\n        _logger.LogWarning(ex, \"Redis down — serving {Key} from database\", key);\n        return await _db.LoadAsync(id, ct);                    // FALLBACK, no outage\n    }\n}" },
+        { type: "callout", kind: "info", title: "Let the framework help", body: "<b>HybridCache</b>'s in-process L1 keeps serving even when the L2 (Redis) is unreachable, and coalesces the rebuilds. Wrap Redis calls in a <b>Polly</b> circuit breaker + timeout so a dead Redis fails fast to the DB instead of piling up connections." },
+        { type: "table", title: "How replicas & automatic failover work", head: ["Approach", "Failover", "How replicas are added"], rows: [
+          ["<b>Primary + replica(s)</b>", "Manual promote unless paired with Sentinel", "Start a node with <code>replicaof &lt;primary&gt; 6379</code>; it syncs then serves reads"],
+          ["<b>Sentinel</b>", "<b>Automatic</b> — detects a dead primary, elects & promotes a replica; clients ask Sentinel for the current primary", "Add a replica node + register it with Sentinel (<code>sentinel monitor</code>)"],
+          ["<b>Cluster</b>", "<b>Automatic per shard</b> — each shard's replica is promoted", "Add shards (rebalance hash slots) and/or replicas per shard"],
+          ["<b>Azure Cache for Redis</b>", "<b>Automatic & managed</b>", "Set replica/shard count in the portal or Bicep — Azure provisions them"],
+        ]},
+        { type: "code", title: "3a) Add a replica (VM / manual)", lang: "bash", label: "add-replica", code:
+"# On the new node — make it a replica of the primary; it back-fills automatically\nredis-server --replicaof redis-primary 6379 --appendonly yes\n\n# Or promote/redirect at runtime\nredis-cli -h new-node REPLICAOF redis-primary 6379\nredis-cli -h primary INFO replication      # verify: connected_slaves:N" },
+        { type: "code", title: "3b) Primary + replica + Sentinel (Docker Compose)", lang: "yaml", label: "docker-compose.redis-ha.yml", code:
+"services:\n  redis-primary:\n    image: redis:7\n    command: [\"redis-server\", \"--appendonly\", \"yes\"]\n  redis-replica:\n    image: redis:7\n    command: [\"redis-server\", \"--replicaof\", \"redis-primary\", \"6379\"]\n    depends_on: [redis-primary]\n  redis-sentinel:\n    image: redis:7\n    # sentinel.conf: sentinel monitor mymaster redis-primary 6379 2\n    #               sentinel down-after-milliseconds mymaster 5000\n    command: [\"redis-sentinel\", \"/etc/redis/sentinel.conf\"]\n    depends_on: [redis-primary, redis-replica]\n    deploy: { replicas: 3 }        # quorum of 3 sentinels" },
+        { type: "table", title: "Where Redis can run", head: ["Environment", "Setup", "Best for"], rows: [
+          ["<b>Docker (single)</b>", "<code>docker run redis:7</code>", "Local dev / a simple single node"],
+          ["<b>Docker Compose (HA)</b>", "primary + replica + 3× Sentinel (above)", "Local HA / failover testing"],
+          ["<b>Kubernetes</b>", "StatefulSet via <b>Redis Operator</b> or the <b>Bitnami Helm</b> chart (Sentinel or Cluster mode)", "Self-managed HA/cluster in the cloud — scale replicas by scaling the set"],
+          ["<b>VM(s)</b>", "Install redis-server; <code>replicaof</code> + Sentinel", "On-prem / lift-and-shift"],
+          ["<b>Managed</b>", "<b>Azure Cache for Redis</b> (Standard = auto-failover replica; Premium = cluster + zones + persistence; Enterprise = active geo-replication), AWS ElastiCache, Redis Enterprise Cloud", "Production with zero ops — failover & replicas are managed for you"],
+        ]},
+        { type: "callout", kind: "ok", title: "Recommended", body: "In Azure, use a <b>managed Azure Cache for Redis (Premium)</b> — replicas, zone redundancy and automatic failover are handled for you, and you scale replicas/shards from config (IaC). Self-host on <b>Kubernetes</b> (Operator/Helm with Sentinel or Cluster) only when you need full control or portability. Either way, keep the <b>DB-fallback + circuit breaker</b> in the app so a rare total outage degrades gracefully instead of failing." },
+      ]},
+
+    ]},
+    { type: "caps", title: "Caching best practices", cols: 4, items: [
+      { icon: "cog", cat: "app", title: "Multiplexer = singleton", desc: "Thread-safe & costly to create; never per-request." },
+      { icon: "book", cat: "domain", title: "Key conventions", desc: "Namespaced, versioned keys: entity:vN:id." },
+      { icon: "retry", cat: "ext", title: "Right-size TTLs", desc: "Per data volatility; add jitter to avoid mass expiry." },
+      { icon: "shield", cat: "sec", title: "Cache the right data", desc: "Hot reads & reference data — not volatile or sensitive data." },
+      { icon: "cache", cat: "mon", title: "Two-tier (L1+L2)", desc: "In-process + Redis via HybridCache for the hottest keys." },
+      { icon: "check", cat: "db", title: "Always safe on miss", desc: "A cache outage degrades to DB reads, never errors." },
+      { icon: "monitor", cat: "mon", title: "Measure hit ratio", desc: "Track hits/misses, latency, evictions, memory." },
+      { icon: "bolt", cat: "app", title: "SCAN, not KEYS", desc: "Never block the server enumerating keys." },
+    ]},
+    { type: "callout", kind: "ok", title: "Where caching fits the platform", body: "Redis caching keeps hot reads off the primary database and powers the CQRS read side (see <b>Redis &amp; CQRS Sync</b>), which is central to hitting the latency and scale NFRs (see <b>Scaling for Max Load</b>). Cache-aside is the default; HybridCache is the modern, stampede-safe way to do it in .NET; and every entry has a TTL and an invalidation plan." },
+  ],
+});
