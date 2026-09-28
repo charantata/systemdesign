@@ -192,6 +192,158 @@ window.SECTIONS.push({
   ],
 });
 
+/* ---------- SOLID & Design Patterns (Build a Car) ---------- */
+window.SECTIONS.push({
+  id: "solid-car", group: "Architecture", label: "SOLID & Patterns (Car)",
+  kicker: "OO Fundamentals", title: "SOLID & design patterns — by building a car",
+  sub: "The clearest way to learn SOLID and the GoF design patterns is one running example. Here we build a Car, feature by feature — engine, wheels, options, driving modes — and each principle and pattern is shown with one focused, understandable C# snippet.",
+  blocks: [
+    { type: "callout", kind: "info", title: "The running example", body: "We're assembling a <b>Car</b> from parts (Engine, Wheels, Transmission) and features (sunroof, turbo, driving modes). SOLID keeps the design clean; the patterns are reusable solutions to recurring problems that show up while building it." },
+
+    { type: "tabs", title: "Principles & patterns", tabs: [
+
+      { label: "SOLID", blocks: [
+        { type: "para", body: "Five principles for classes that are easy to change and extend. Each shown as a car concern." },
+        { type: "accordion", items: [
+          { title: "S — Single Responsibility", badge: "one reason to change", open: true, blocks: [
+            { type: "para", body: "A class should do <b>one thing</b>. The engine shouldn't also log and calculate fuel bills." },
+            { type: "code", lang: "csharp", label: "SRP", code:
+"// BAD: the engine does everything\nclass Engine { void Start() {} void LogToFile(string m) {} decimal FuelCost() => 0; }\n\n// GOOD: one responsibility each -> one reason to change each\nclass Engine         { public void Start() { /* ignition */ } }\nclass Logger         { public void Log(string m) { /* ... */ } }\nclass FuelCalculator { public decimal Cost(double litres) => (decimal)litres * 1.6m; }" } ]},
+          { title: "O — Open/Closed", badge: "extend, don't modify", blocks: [
+            { type: "para", body: "Add a <b>new engine type</b> without editing existing, working code — depend on an abstraction." },
+            { type: "code", lang: "csharp", label: "OCP", code:
+"public interface IEngine { void Start(); }\npublic class PetrolEngine   : IEngine { public void Start() { /* ... */ } }\npublic class ElectricEngine : IEngine { public void Start() { /* ... */ } }  // NEW: no Car change\n\npublic class Car(IEngine engine) { public void TurnKey() => engine.Start(); }" } ]},
+          { title: "L — Liskov Substitution", badge: "subtypes stay substitutable", blocks: [
+            { type: "para", body: "Any subtype must work wherever the base is expected — don't add a subtype that breaks the contract." },
+            { type: "code", lang: "csharp", label: "LSP", code:
+"public abstract class Car { public abstract void Accelerate(); }\npublic class PetrolCar   : Car { public override void Accelerate() { /* ... */ } }\npublic class ElectricCar : Car { public override void Accelerate() { /* ... */ } }  // OK\n\n// BAD: forcing ElectricCar to Refuel() throws -> callers of Car break.\n// Model capabilities with interfaces instead (see ISP)." } ]},
+          { title: "I — Interface Segregation", badge: "small, focused interfaces", blocks: [
+            { type: "para", body: "Don't force a car to implement things it can't do (a petrol car can't <code>Charge()</code>)." },
+            { type: "code", lang: "csharp", label: "ISP", code:
+"public interface IDrivable   { void Drive(); }\npublic interface IChargeable { void Charge(); }\npublic interface IRefuelable { void Refuel(); }\n\npublic class ElectricCar : IDrivable, IChargeable { /* no Refuel */ }\npublic class PetrolCar   : IDrivable, IRefuelable { /* no Charge */ }\n// vs one fat IVehicle { Drive; Charge; Refuel; Fly; } everyone must implement" } ]},
+          { title: "D — Dependency Inversion", badge: "depend on abstractions", blocks: [
+            { type: "para", body: "High-level <code>Car</code> depends on the <code>IEngine</code> abstraction, not a concrete engine; the DI container wires the real one." },
+            { type: "code", lang: "csharp", label: "DIP", code:
+"public class Car(IEngine engine) { public void Start() => engine.Start(); }\n\n// Composition root chooses the concrete implementation\nservices.AddScoped<IEngine, ElectricEngine>();\nservices.AddScoped<Car>();" } ]},
+        ]},
+      ]},
+
+      { label: "Creational", blocks: [
+        { type: "para", body: "Patterns about <b>how objects are created</b>. Builder is the star of \"build a car.\"" },
+        { type: "accordion", items: [
+          { title: "Builder", badge: "assemble step by step", open: true, blocks: [
+            { type: "para", body: "Construct a complex Car <b>feature by feature</b> with a readable, fluent API — the essence of building a car." },
+            { type: "code", lang: "csharp", label: "Builder", code:
+"public class CarBuilder\n{\n    private readonly Car _car = new();\n    public CarBuilder WithEngine(string e) { _car.Engine = e; return this; }\n    public CarBuilder WithWheels(int n)     { _car.Wheels = n; return this; }\n    public CarBuilder WithColor(string c)   { _car.Color = c; return this; }\n    public CarBuilder WithSunroof()         { _car.HasSunroof = true; return this; }\n    public Car Build() => _car;\n}\n\nvar car = new CarBuilder()\n    .WithEngine(\"Electric\").WithWheels(4).WithColor(\"Midnight Blue\").WithSunroof()\n    .Build();   // feature by feature -> a fully-configured car" } ]},
+          { title: "Factory Method", badge: "subclass decides the product", blocks: [
+            { type: "para", body: "A creator subclass decides which concrete car to make." },
+            { type: "code", lang: "csharp", label: "Factory Method", code:
+"public abstract class CarFactory { public abstract ICar CreateCar(); }\npublic class SedanFactory : CarFactory { public override ICar CreateCar() => new Sedan(); }\npublic class SuvFactory   : CarFactory { public override ICar CreateCar() => new Suv(); }" } ]},
+          { title: "Abstract Factory", badge: "families of parts", blocks: [
+            { type: "para", body: "Create a whole <b>family</b> of matching parts (a trim level) without naming concretes." },
+            { type: "code", lang: "csharp", label: "Abstract Factory", code:
+"public interface ICarPartsFactory { IEngine Engine(); IWheels Wheels(); }\npublic class SportFactory : ICarPartsFactory { public IEngine Engine() => new V8();       public IWheels Wheels() => new AlloyWheels(); }\npublic class EcoFactory   : ICarPartsFactory { public IEngine Engine() => new Electric(); public IWheels Wheels() => new EcoWheels(); }" } ]},
+          { title: "Prototype", badge: "clone a configured object", blocks: [
+            { type: "para", body: "Clone a pre-configured car instead of rebuilding it from scratch." },
+            { type: "code", lang: "csharp", label: "Prototype", code:
+"public class Car : ICloneable\n{\n    public string Engine = \"\"; public string Color = \"\";\n    public object Clone() => MemberwiseClone();   // deep-clone nested parts as needed\n}\nvar demo = (Car)baseCar.Clone(); demo.Color = \"Red\";" } ]},
+          { title: "Singleton", badge: "exactly one instance", blocks: [
+            { type: "para", body: "One shared instance — e.g. the garage's configuration. In .NET, prefer a DI <b>singleton lifetime</b> over the static pattern." },
+            { type: "code", lang: "csharp", label: "Singleton", code:
+"public sealed class GarageConfig\n{\n    private static readonly Lazy<GarageConfig> _i = new(() => new GarageConfig());\n    public static GarageConfig Instance => _i.Value;\n    private GarageConfig() { }\n}\n// Preferred in ASP.NET Core: services.AddSingleton<GarageConfig>();" } ]},
+        ]},
+      ]},
+
+      { label: "Structural", blocks: [
+        { type: "para", body: "Patterns about <b>composing objects & classes</b> into larger structures." },
+        { type: "accordion", items: [
+          { title: "Decorator", badge: "add features at runtime", open: true, blocks: [
+            { type: "para", body: "Add options (sunroof, turbo) to a car dynamically — no subclass per combination." },
+            { type: "code", lang: "csharp", label: "Decorator", code:
+"public interface ICar { decimal Price(); }\npublic class BaseCar : ICar { public decimal Price() => 20000; }\npublic abstract class CarOption(ICar car) : ICar { protected ICar Car = car; public abstract decimal Price(); }\npublic class Sunroof(ICar car) : CarOption(car) { public override decimal Price() => Car.Price() + 1500; }\npublic class Turbo(ICar car)   : CarOption(car) { public override decimal Price() => Car.Price() + 3000; }\n\nICar car = new Turbo(new Sunroof(new BaseCar()));   // 24500 — stack features freely" } ]},
+          { title: "Adapter", badge: "make incompatible fit", blocks: [
+            { type: "para", body: "Wrap a legacy engine so it satisfies the modern <code>IEngine</code> interface." },
+            { type: "code", lang: "csharp", label: "Adapter", code:
+"public class LegacyEngine { public void Ignite() { /* old API */ } }\npublic class LegacyEngineAdapter(LegacyEngine legacy) : IEngine\n{\n    public void Start() => legacy.Ignite();   // translate new call -> old method\n}" } ]},
+          { title: "Facade", badge: "one simple entry point", blocks: [
+            { type: "para", body: "Hide a complex start-up sequence behind a single <code>Start()</code> — the driver just turns the key." },
+            { type: "code", lang: "csharp", label: "Facade", code:
+"public class CarStartFacade(FuelPump pump, Ecu ecu, Ignition ign)\n{\n    public void Start() { pump.Prime(); ecu.SelfCheck(); ign.Fire(); }  // 3 subsystems, 1 call\n}" } ]},
+          { title: "Composite", badge: "part & whole uniformly", blocks: [
+            { type: "para", body: "A car is assemblies of parts of sub-parts — treat a single part and a group the same way." },
+            { type: "code", lang: "csharp", label: "Composite", code:
+"public interface ICarComponent { decimal Weight(); }\npublic class Part(decimal w) : ICarComponent { public decimal Weight() => w; }\npublic class Assembly : ICarComponent\n{\n    private readonly List<ICarComponent> _children = new();\n    public void Add(ICarComponent c) => _children.Add(c);\n    public decimal Weight() => _children.Sum(c => c.Weight());   // recurses\n}" } ]},
+          { title: "Bridge", badge: "vary abstraction & impl", blocks: [
+            { type: "para", body: "Separate the car abstraction from the engine implementation so each can change independently." },
+            { type: "code", lang: "csharp", label: "Bridge", code:
+"public interface IEngineImpl { void Run(); }\npublic abstract class Car(IEngineImpl engine) { protected IEngineImpl Engine = engine; public abstract void Drive(); }\npublic class SportsCar(IEngineImpl e) : Car(e) { public override void Drive() => Engine.Run(); }" } ]},
+          { title: "Proxy", badge: "control access", blocks: [
+            { type: "para", body: "A stand-in that guards/caches an expensive call — e.g. remote diagnostics." },
+            { type: "code", lang: "csharp", label: "Proxy", code:
+"public interface IDiagnostics { string Report(); }\npublic class RemoteDiagnostics : IDiagnostics { public string Report() => \"...expensive call\"; }\npublic class DiagnosticsProxy(IDiagnostics real) : IDiagnostics\n{\n    private string? _cache;\n    public string Report() => _cache ??= real.Report();   // lazy + cached\n}" } ]},
+          { title: "Flyweight", badge: "share repeated data", blocks: [
+            { type: "para", body: "Share immutable, repeated data (the same bolt spec used hundreds of times)." },
+            { type: "code", lang: "csharp", label: "Flyweight", code:
+"public sealed record BoltSpec(string Size, string Material);   // shared, immutable\npublic class BoltFactory\n{\n    private readonly Dictionary<string, BoltSpec> _cache = new();\n    public BoltSpec Get(string size, string mat) =>\n        _cache.TryGetValue(size + mat, out var b) ? b : _cache[size + mat] = new(size, mat);\n}" } ]},
+        ]},
+      ]},
+
+      { label: "Behavioral", blocks: [
+        { type: "para", body: "Patterns about <b>how objects interact & share responsibility</b>." },
+        { type: "accordion", items: [
+          { title: "Strategy", badge: "swap an algorithm", open: true, blocks: [
+            { type: "para", body: "Change behaviour at runtime — pick a driving mode (Eco / Sport)." },
+            { type: "code", lang: "csharp", label: "Strategy", code:
+"public interface IDriveMode { void Configure(Car c); }\npublic class EcoMode   : IDriveMode { public void Configure(Car c) { /* soften throttle */ } }\npublic class SportMode : IDriveMode { public void Configure(Car c) { /* sharpen throttle */ } }\n\npublic class Car { public IDriveMode Mode { get; set; } = new EcoMode();\n                   public void ApplyMode() => Mode.Configure(this); }" } ]},
+          { title: "Observer", badge: "publish / subscribe", blocks: [
+            { type: "para", body: "The dashboard reacts to engine events. C# has this built in via <code>event</code>." },
+            { type: "code", lang: "csharp", label: "Observer", code:
+"public class Engine\n{\n    public event Action<int>? RpmChanged;\n    public void Rev(int rpm) => RpmChanged?.Invoke(rpm);\n}\nengine.RpmChanged += rpm => dashboard.Update(rpm);   // subscribe" } ]},
+          { title: "State", badge: "behaviour by state", blocks: [
+            { type: "para", body: "The car behaves differently per state (Parked / Driving) — transitions are explicit." },
+            { type: "code", lang: "csharp", label: "State", code:
+"public interface ICarState { ICarState Accelerate(); }\npublic class Parked  : ICarState { public ICarState Accelerate() => new Driving(); }\npublic class Driving : ICarState { public ICarState Accelerate() => this; }\n\npublic class Car { private ICarState _state = new Parked();\n                   public void Accelerate() => _state = _state.Accelerate(); }" } ]},
+          { title: "Command", badge: "action as an object", blocks: [
+            { type: "para", body: "Wrap actions as objects — a key-fob button executes a command (and could be queued/undone)." },
+            { type: "code", lang: "csharp", label: "Command", code:
+"public interface ICommand { void Execute(); }\npublic class StartCommand(Car car) : ICommand { public void Execute() => car.Start(); }\npublic class LockCommand(Car car)  : ICommand { public void Execute() => car.Lock(); }\npublic class KeyFob { public void Press(ICommand c) => c.Execute(); }" } ]},
+          { title: "Chain of Responsibility", badge: "pass along handlers", blocks: [
+            { type: "para", body: "Run pre-drive checks as a chain — each handler does its part then passes on." },
+            { type: "code", lang: "csharp", label: "Chain of Responsibility", code:
+"public abstract class Check { protected Check? Next;\n    public Check SetNext(Check n) { Next = n; return n; }\n    public virtual bool Run(Car c) => Next?.Run(c) ?? true; }\npublic class FuelCheck  : Check { public override bool Run(Car c) => c.Fuel > 0  && base.Run(c); }\npublic class BrakeCheck : Check { public override bool Run(Car c) => c.BrakesOk && base.Run(c); }" } ]},
+          { title: "Template Method", badge: "fixed steps, filled in", blocks: [
+            { type: "para", body: "The assembly line has a fixed skeleton; each model fills in the steps." },
+            { type: "code", lang: "csharp", label: "Template Method", code:
+"public abstract class CarAssembly\n{\n    public void Build() { InstallEngine(); InstallWheels(); Paint(); }  // fixed order\n    protected abstract void InstallEngine();\n    protected abstract void InstallWheels();\n    protected virtual void Paint() { /* default */ }\n}" } ]},
+          { title: "Mediator", badge: "central coordinator", blocks: [
+            { type: "para", body: "Components talk through the ECU (mediator), not directly to each other." },
+            { type: "code", lang: "csharp", label: "Mediator", code:
+"public interface ICarMediator { void Notify(string sensor, string evt); }\npublic class Ecu : ICarMediator\n{\n    public void Notify(string sensor, string evt) { /* e.g. skid -> engage ABS */ }\n}" } ]},
+          { title: "Memento", badge: "save & restore state", blocks: [
+            { type: "para", body: "Save and restore driver settings (seat, mirrors) without exposing internals." },
+            { type: "code", lang: "csharp", label: "Memento", code:
+"public record SettingsMemento(int Seat, int Mirror);\npublic class Car\n{\n    public int Seat, Mirror;\n    public SettingsMemento Save() => new(Seat, Mirror);\n    public void Restore(SettingsMemento m) { Seat = m.Seat; Mirror = m.Mirror; }\n}" } ]},
+          { title: "Iterator", badge: "traverse a collection", blocks: [
+            { type: "para", body: "Walk the car's parts without exposing the internal list — native in C# via <code>IEnumerable</code>." },
+            { type: "code", lang: "csharp", label: "Iterator", code:
+"public class Car : IEnumerable<Part>\n{\n    private readonly List<Part> _parts = new();\n    public IEnumerator<Part> GetEnumerator() => _parts.GetEnumerator();\n    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();\n}\nforeach (var p in car) { /* inspect each part */ }" } ]},
+          { title: "Visitor", badge: "new ops, same classes", blocks: [
+            { type: "para", body: "Add operations over parts (an inspection) without modifying the part classes." },
+            { type: "code", lang: "csharp", label: "Visitor", code:
+"public interface IPartVisitor { void Visit(Engine e); void Visit(Wheel w); }\npublic interface IPart { void Accept(IPartVisitor v); }\npublic class Engine : IPart { public void Accept(IPartVisitor v) => v.Visit(this); }\npublic class InspectionVisitor : IPartVisitor\n{\n    public void Visit(Engine e) { /* check engine */ }\n    public void Visit(Wheel w)  { /* check tread */ }\n}" } ]},
+          { title: "Interpreter", badge: "evaluate a grammar", blocks: [
+            { type: "para", body: "Evaluate a small rule language — e.g. a diagnostic expression. (Rare; used for DSLs/rules.)" },
+            { type: "code", lang: "csharp", label: "Interpreter", code:
+"public interface IExpr { bool Eval(Car c); }\npublic class FuelAbove(int n) : IExpr { public bool Eval(Car c) => c.Fuel > n; }\npublic class And(IExpr a, IExpr b) : IExpr { public bool Eval(Car c) => a.Eval(c) && b.Eval(c); }\n// new And(new FuelAbove(10), new BrakesOk()).Eval(car)" } ]},
+        ]},
+      ]},
+
+    ]},
+
+    { type: "callout", kind: "ok", title: "How this connects to the rest", body: "These are the same principles and patterns applied across the platform — <b>Strategy/Factory/Adapter/Decorator/Repository/Mediator</b> appear in <b>Design Patterns</b>, and <b>DDD</b> builds on SOLID (rich models, dependency inversion). Learn them on a car; apply them to the audit domain." },
+  ],
+});
+
 /* ---------- Domain-Driven Design (deep dive) ---------- */
 window.SECTIONS.push({
   id: "ddd", group: "Architecture", label: "Domain-Driven Design",
