@@ -87,6 +87,14 @@
       });
     });
 
+    // dropdown selector
+    $$(".dd-select").forEach((sel) => {
+      sel.addEventListener("change", () => {
+        const container = sel.closest(".block").querySelector('[data-dd-panes="' + sel.dataset.dropdown + '"]');
+        if (container) $$(".dd-pane", container).forEach((p) => (p.hidden = p.id !== sel.value));
+      });
+    });
+
     // accordion + adr
     $$(".acc-head").forEach((h) => h.addEventListener("click", () => h.parentElement.classList.toggle("open")));
     $$(".adr-head").forEach((h) => h.addEventListener("click", () => h.parentElement.classList.toggle("open")));

@@ -541,11 +541,31 @@
     );
   }
 
+  /* ---------- Dropdown selector ---------- */
+  function dropdown(b) {
+    const gid = "dd" + (++R._idc);
+    const opts = b.items.map((it, i) =>
+      '<option value="' + gid + "-" + i + '"' + (i === 0 ? " selected" : "") + ">" + esc(it.name) + "</option>"
+    ).join("");
+    const panes = b.items.map((it, i) =>
+      '<div class="dd-pane" id="' + gid + "-" + i + '"' + (i === 0 ? "" : " hidden") + ">" +
+      (it.name ? '<div class="dd-pane-title">' + esc(it.name) + "</div>" : "") +
+      R.renderBlocks(arr(it.blocks)) + "</div>"
+    ).join("");
+    return (
+      '<div class="block">' + titleDesc(b) +
+      '<div class="dd-bar"><span class="dd-label">' + esc(b.label || "Choose a pattern") + "</span>" +
+      '<div class="dd-select-wrap"><select class="dd-select" data-dropdown="' + gid + '" aria-label="' + esc(b.label || "Choose a pattern") + '">' + opts + "</select>" +
+      '<svg class="dd-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>' +
+      '<div data-dd-panes="' + gid + '">' + panes + "</div></div>"
+    );
+  }
+
   /* ---------- dispatch ---------- */
   const REG = {
     para, caps, kpis, callout, code, table, featureList, twoCol,
     tabs, accordion, flow: flowDiagram, layered: layeredDiagram,
-    stateMachine, player, adrs, timeline, vs, metrics, erd,
+    stateMachine, player, adrs, timeline, vs, metrics, erd, dropdown,
   };
 
   R.renderBlocks = function (blocks) {

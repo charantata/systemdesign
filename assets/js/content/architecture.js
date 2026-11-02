@@ -144,6 +144,82 @@ window.SECTIONS.push({
   kicker: "Engineering", title: "Design patterns catalogue",
   sub: "The patterns that give this architecture its properties. Each entry states the problem, why it is required, where it lives, and shows a concise C# implementation. Saga and Outbox have their own dedicated sections.",
   blocks: [
+    { type: "callout", kind: "info", title: "Pattern explorer", body: "Pick any pattern from the dropdown below to see a detailed C# example and <b>where it shows up in real .NET</b>. The platform-specific patterns (Clean Architecture, CQRS, Repository, resilience) are catalogued in the accordions underneath." },
+    { type: "dropdown", title: "GoF design patterns — pick one", desc: "A focused C# example plus real-world .NET usage for each classic pattern.", label: "Design pattern", items: [
+      { name: "Singleton", blocks: [
+        { type: "para", body: "<b>Intent:</b> ensure a class has exactly one instance with a global access point.<br/><b>Where it's used:</b> the DI <b>singleton lifetime</b>, <code>IConfiguration</code>, <code>ILoggerFactory</code>, <code>IMemoryCache</code>, <code>IHttpClientFactory</code>, an app-wide clock/config." },
+        { type: "code", lang: "csharp", label: "Singleton.cs", code:
+"public sealed class AppClock\n{\n    private static readonly Lazy<AppClock> _instance = new(() => new AppClock());\n    public static AppClock Instance => _instance.Value;   // thread-safe, lazy\n    private AppClock() { }\n    public DateTime UtcNow => DateTime.UtcNow;\n}\n\n// In ASP.NET Core, prefer the DI singleton lifetime instead of the static pattern:\n// services.AddSingleton<IClock, SystemClock>();" } ]},
+      { name: "Builder", blocks: [
+        { type: "para", body: "<b>Intent:</b> construct a complex object step by step with a readable, fluent API.<br/><b>Where it's used:</b> <code>StringBuilder</code>, <code>WebApplicationBuilder</code>/<code>HostBuilder</code>, EF Core <code>ModelBuilder</code>, <code>UriBuilder</code>, fluent test-data builders." },
+        { type: "code", lang: "csharp", label: "Builder.cs", code:
+"public class EmailBuilder\n{\n    private readonly Email _e = new();\n    public EmailBuilder To(string a)      { _e.To.Add(a); return this; }\n    public EmailBuilder Subject(string s) { _e.Subject = s; return this; }\n    public EmailBuilder Body(string b)    { _e.Body = b; return this; }\n    public EmailBuilder Attach(string p)  { _e.Attachments.Add(p); return this; }\n    public Email Build() => _e;\n}\n\nvar email = new EmailBuilder()\n    .To(\"ops@acme.com\").Subject(\"Report\").Body(\"...\").Attach(\"q4.pdf\")\n    .Build();" } ]},
+      { name: "Factory Method", blocks: [
+        { type: "para", body: "<b>Intent:</b> let a subclass decide which concrete type to create.<br/><b>Where it's used:</b> <code>ILoggerFactory.CreateLogger</code>, <code>IHttpClientFactory.CreateClient</code>, <code>DbProviderFactory</code>, <code>Activator.CreateInstance</code>." },
+        { type: "code", lang: "csharp", label: "FactoryMethod.cs", code:
+"public interface INotification { void Send(string msg); }\npublic class EmailNotification : INotification { public void Send(string m) { } }\npublic class SmsNotification   : INotification { public void Send(string m) { } }\n\npublic abstract class NotifierFactory { public abstract INotification Create(); }\npublic class EmailFactory : NotifierFactory { public override INotification Create() => new EmailNotification(); }\npublic class SmsFactory   : NotifierFactory { public override INotification Create() => new SmsNotification(); }" } ]},
+      { name: "Adapter", blocks: [
+        { type: "para", body: "<b>Intent:</b> make an incompatible interface usable by wrapping it.<br/><b>Where it's used:</b> anti-corruption layers over third-party SDKs/legacy APIs, <code>TextReader</code> over streams, collection adapters." },
+        { type: "code", lang: "csharp", label: "Adapter.cs", code:
+"public interface IPaymentGateway { bool Charge(decimal amount); }\n\npublic class StripeSdk { public StripeResult MakePayment(long cents) => new(); }   // 3rd-party shape\n\npublic class StripeAdapter(StripeSdk sdk) : IPaymentGateway\n{\n    public bool Charge(decimal amount) => sdk.MakePayment((long)(amount * 100)).Success;  // translate\n}" } ]},
+      { name: "Facade", blocks: [
+        { type: "para", body: "<b>Intent:</b> a simple entry point over a complex subsystem.<br/><b>Where it's used:</b> <code>HttpClient</code> (over handlers/sockets), SDK entry points, application \"service\" classes, <code>WebApplication</code>." },
+        { type: "code", lang: "csharp", label: "Facade.cs", code:
+"public class OrderFacade(IInventory inv, IPayments pay, IShipping ship)\n{\n    public void PlaceOrder(Order o)\n    {\n        inv.Reserve(o);      // three subsystems...\n        pay.Charge(o);\n        ship.Schedule(o);    // ...behind one simple call\n    }\n}" } ]},
+      { name: "Proxy", blocks: [
+        { type: "para", body: "<b>Intent:</b> a stand-in that controls access (lazy, remote, protection, caching).<br/><b>Where it's used:</b> EF Core lazy-loading proxies, <code>DispatchProxy</code>, gRPC/WCF client proxies, virtual/caching proxies." },
+        { type: "code", lang: "csharp", label: "Proxy.cs", code:
+"public interface IReportService { string Generate(int id); }\npublic class ReportService : IReportService { public string Generate(int id) => \"...heavy query...\"; }\n\npublic class CachingReportProxy(IReportService inner) : IReportService\n{\n    private readonly Dictionary<int, string> _cache = new();\n    public string Generate(int id) =>\n        _cache.TryGetValue(id, out var r) ? r : _cache[id] = inner.Generate(id);   // guard the real call\n}" } ]},
+      { name: "Decorator", blocks: [
+        { type: "para", body: "<b>Intent:</b> add behaviour dynamically by wrapping, without subclassing.<br/><b>Where it's used:</b> <code>Stream</code> wrappers (<code>BufferedStream</code>, <code>GZipStream</code>, <code>CryptoStream</code>), ASP.NET Core middleware, Scrutor <code>.Decorate()</code>, logging/retry/caching wrappers." },
+        { type: "code", lang: "csharp", label: "Decorator.cs", code:
+"public interface IOrderRepo { Order Get(int id); }\npublic class OrderRepo : IOrderRepo { public Order Get(int id) => new(); }\n\npublic class LoggingOrderRepo(IOrderRepo inner, ILogger<LoggingOrderRepo> log) : IOrderRepo\n{\n    public Order Get(int id)\n    {\n        log.LogInformation(\"Getting order {Id}\", id);\n        return inner.Get(id);   // wrap -> add behaviour -> delegate\n    }\n}\n\n// With Scrutor: services.AddScoped<IOrderRepo, OrderRepo>();\n//               services.Decorate<IOrderRepo, LoggingOrderRepo>();" } ]},
+      { name: "Composite", blocks: [
+        { type: "para", body: "<b>Intent:</b> treat a single object and a tree of objects uniformly.<br/><b>Where it's used:</b> UI control trees (WPF/Blazor/MAUI), file systems, <code>Expression</code> trees, org charts, nested menus." },
+        { type: "code", lang: "csharp", label: "Composite.cs", code:
+"public interface IFileNode { long Size(); }\npublic class FileLeaf(long size) : IFileNode { public long Size() => size; }\n\npublic class Folder : IFileNode\n{\n    private readonly List<IFileNode> _children = new();\n    public void Add(IFileNode n) => _children.Add(n);\n    public long Size() => _children.Sum(c => c.Size());   // recurses the whole tree\n}" } ]},
+      { name: "Strategy", blocks: [
+        { type: "para", body: "<b>Intent:</b> make a family of algorithms interchangeable at runtime.<br/><b>Where it's used:</b> <code>IComparer&lt;T&gt;</code>/sorting, pluggable <code>IDistributedCache</code>/auth handlers, pricing &amp; discount rules, <code>JsonConverter</code>." },
+        { type: "code", lang: "csharp", label: "Strategy.cs", code:
+"public interface IDiscount { decimal Apply(decimal total); }\npublic class NoDiscount            : IDiscount { public decimal Apply(decimal t) => t; }\npublic class PercentOff(decimal pct) : IDiscount { public decimal Apply(decimal t) => t * (1 - pct); }\n\npublic class Checkout(IDiscount discount)\n{\n    public decimal Total(decimal subtotal) => discount.Apply(subtotal);   // swap the algorithm via DI\n}" } ]},
+      { name: "Observer", blocks: [
+        { type: "para", body: "<b>Intent:</b> notify many subscribers when a subject changes.<br/><b>Where it's used:</b> C# <code>event</code>/<code>EventHandler</code>, <code>IObservable&lt;T&gt;</code>/Rx, <code>INotifyPropertyChanged</code> (MVVM), SignalR, MediatR notifications, domain events." },
+        { type: "code", lang: "csharp", label: "Observer.cs", code:
+"public class Stock\n{\n    public event EventHandler<decimal>? PriceChanged;   // C# events ARE the Observer pattern\n    private decimal _price;\n    public decimal Price\n    {\n        get => _price;\n        set { _price = value; PriceChanged?.Invoke(this, value); }\n    }\n}\n\nstock.PriceChanged += (_, p) => dashboard.Update(p);   // subscribers react" } ]},
+      { name: "State", blocks: [
+        { type: "para", body: "<b>Intent:</b> let an object change behaviour as its internal state changes.<br/><b>Where it's used:</b> order/workflow state machines, TCP/connection states, UI wizards; the <b>Stateless</b> library." },
+        { type: "code", lang: "csharp", label: "State.cs", code:
+"public interface IOrderState { IOrderState Next(); string Name { get; } }\npublic class Pending   : IOrderState { public string Name => \"Pending\";   public IOrderState Next() => new Shipped(); }\npublic class Shipped   : IOrderState { public string Name => \"Shipped\";   public IOrderState Next() => new Delivered(); }\npublic class Delivered : IOrderState { public string Name => \"Delivered\"; public IOrderState Next() => this; }\n\npublic class Order\n{\n    public IOrderState State { get; private set; } = new Pending();\n    public void Advance() => State = State.Next();\n}" } ]},
+      { name: "Command", blocks: [
+        { type: "para", body: "<b>Intent:</b> wrap a request as an object (so it can be queued, logged, undone).<br/><b>Where it's used:</b> MediatR <code>IRequest</code> (CQRS), WPF/MAUI <code>ICommand</code>, background job queues, undo/redo." },
+        { type: "code", lang: "csharp", label: "Command.cs", code:
+"public interface ICommand { void Execute(); void Undo(); }\n\npublic class AddTextCommand(Document doc, string text) : ICommand\n{\n    public void Execute() => doc.Append(text);\n    public void Undo()    => doc.RemoveLast(text.Length);\n}\n\npublic class CommandManager\n{\n    private readonly Stack<ICommand> _history = new();\n    public void Run(ICommand c) { c.Execute(); _history.Push(c); }\n    public void Undo() { if (_history.Count > 0) _history.Pop().Undo(); }   // undo support\n}" } ]},
+      { name: "Template Method", blocks: [
+        { type: "para", body: "<b>Intent:</b> define the skeleton of an algorithm, letting subclasses fill the steps.<br/><b>Where it's used:</b> <code>BackgroundService.ExecuteAsync</code>, framework base classes, <code>Stream</code>, the <code>ControllerBase</code> pipeline." },
+        { type: "code", lang: "csharp", label: "TemplateMethod.cs", code:
+"public abstract class DataImporter\n{\n    public void Import(string path)        // the fixed skeleton (template method)\n    {\n        var raw  = Read(path);\n        var rows = Parse(raw);\n        Save(rows);\n    }\n    protected abstract string Read(string path);\n    protected abstract IEnumerable<Row> Parse(string raw);\n    protected virtual void Save(IEnumerable<Row> rows) { /* default */ }\n}\n\npublic class CsvImporter : DataImporter\n{\n    protected override string Read(string p) => File.ReadAllText(p);\n    protected override IEnumerable<Row> Parse(string raw) => new List<Row>();  // split CSV\n}" } ]},
+      { name: "Iterator", blocks: [
+        { type: "para", body: "<b>Intent:</b> access elements sequentially without exposing the underlying collection.<br/><b>Where it's used:</b> <code>IEnumerable&lt;T&gt;</code>/<code>IEnumerator&lt;T&gt;</code>, <code>yield return</code>, LINQ, every <code>foreach</code>." },
+        { type: "code", lang: "csharp", label: "Iterator.cs", code:
+"public class NumberRange(int start, int count) : IEnumerable<int>\n{\n    public IEnumerator<int> GetEnumerator()\n    {\n        for (int i = 0; i < count; i++)\n            yield return start + i;          // 'yield' builds the iterator for you\n    }\n    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();\n}\n\nforeach (var n in new NumberRange(10, 5)) { /* 10, 11, 12, 13, 14 */ }" } ]},
+      { name: "Chain of Responsibility", blocks: [
+        { type: "para", body: "<b>Intent:</b> pass a request along a chain of handlers until one handles it.<br/><b>Where it's used:</b> ASP.NET Core <b>middleware</b>, <code>DelegatingHandler</code> (HttpClient pipeline), MediatR pipeline behaviours, validation chains." },
+        { type: "code", lang: "csharp", label: "ChainOfResponsibility.cs", code:
+"public abstract class Approver\n{\n    protected Approver? Next;\n    public Approver SetNext(Approver n) { Next = n; return n; }\n    public abstract void Handle(Expense e);\n}\npublic class Manager : Approver {\n    public override void Handle(Expense e) {\n        if (e.Amount <= 1000) Approve(e); else Next?.Handle(e); } }\npublic class Director : Approver {\n    public override void Handle(Expense e) {\n        if (e.Amount <= 10000) Approve(e); else Next?.Handle(e); } }\n\n// var chain = new Manager(); chain.SetNext(new Director());\n// chain.Handle(expense);   // escalates until someone approves" } ]},
+      { name: "Outro — choosing a pattern", blocks: [
+        { type: "para", body: "Design patterns are a <b>shared vocabulary</b>, not a goal. Reach for one only when it removes real pain — the simplest code that works beats a pattern applied for its own sake. And notice how many are already <b>built into .NET</b>, so you rarely hand-roll them." },
+        { type: "featureList", title: "Already built into .NET", items: [
+          "<b>Observer</b> → <code>event</code> / <code>IObservable&lt;T&gt;</code> / Rx / <code>INotifyPropertyChanged</code>",
+          "<b>Iterator</b> → <code>IEnumerable&lt;T&gt;</code> / <code>yield</code> / LINQ / <code>foreach</code>",
+          "<b>Decorator</b> → <code>Stream</code> wrappers, ASP.NET middleware, Scrutor <code>.Decorate()</code>",
+          "<b>Factory</b> → <code>ILoggerFactory</code>, <code>IHttpClientFactory</code>",
+          "<b>Singleton</b> → DI singleton lifetime",
+          "<b>Chain of Responsibility</b> → ASP.NET middleware, <code>DelegatingHandler</code>",
+          "<b>Command</b> → MediatR / CQRS, WPF <code>ICommand</code>",
+          "<b>Builder</b> → <code>StringBuilder</code>, <code>WebApplicationBuilder</code>, EF <code>ModelBuilder</code>",
+          "<b>Template Method</b> → <code>BackgroundService.ExecuteAsync</code>" ]},
+        { type: "callout", kind: "ok", title: "Rule of thumb", body: "Start simple; refactor <i>to</i> a pattern when duplication or change-pain appears — and prefer the .NET built-in over hand-rolling your own." } ]},
+    ]},
     { type: "accordion", title: "Structural & tactical patterns", items: [
       { title: "Clean Architecture + DDD", badge: "Architecture", open: true, blocks: [
         { type: "para", body: "<b>Problem:</b> business logic entangled with frameworks becomes untestable and rigid. <b>Solution:</b> concentric layers with the dependency rule; a rich domain model expresses the ubiquitous language. <b>Location:</b> whole solution." },

@@ -314,6 +314,18 @@ table.tbl code { font-family: var(--ff-mono); font-size: 12px; background: var(-
 .drawer-body h4:first-child { margin-top:0; }
 .drawer-body p { font-size:14px; color: var(--text-2); line-height:1.6; margin-bottom:10px; }
 
+/* ---- Dropdown selector ---- */
+.dd-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.dd-label { font-size: 13.5px; font-weight: 700; color: var(--text-2); white-space: nowrap; }
+.dd-select-wrap { position: relative; flex: 1; min-width: 220px; }
+.dd-select { width: 100%; appearance: none; -webkit-appearance: none; padding: 10px 40px 10px 14px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--card); color: var(--text); font-size: 14px; font-weight: 600; font-family: var(--ff-sans); cursor: pointer; outline: none; transition: .15s ease; }
+.dd-select:hover { border-color: var(--accent-border); }
+.dd-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.dd-chev { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--text-3); pointer-events: none; }
+.dd-pane { animation: fade .25s ease; }
+.dd-pane-title { font-size: 18px; font-weight: 800; letter-spacing: -.01em; margin-bottom: 10px; color: var(--text); display: flex; align-items: center; gap: 9px; }
+.dd-pane-title::before { content: ""; width: 4px; height: 20px; border-radius: 3px; background: linear-gradient(var(--accent), var(--accent-2)); }
+
 /* ---- ER diagram ---- */
 .erd-scroll { overflow-x: auto; padding-bottom: 6px; }
 .erd { max-width: 100%; height: auto; display: block; }
