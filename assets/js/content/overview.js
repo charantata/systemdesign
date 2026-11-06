@@ -232,3 +232,158 @@ window.SECTIONS.push({
     ]},
   ],
 });
+
+/* ============================================================
+   Project Planning — planning, budgeting, process, stakeholders, risk
+   ============================================================ */
+window.SECTIONS.push({
+  id: "planning", num: "05", group: "Project Planning", label: "Project Planning",
+  kicker: "Delivery & Governance", title: "Project planning & delivery notes",
+  sub: "How this solution is planned, funded, delivered and governed — the phases and progress steps, how the budget is built and controlled, how stakeholders are kept aligned, the areas that make or break delivery, and the risks with their avoiding measures.",
+  blocks: [
+    { type: "callout", kind: "info", title: "Plan, deliver, govern",
+      body: "Good delivery is three things running together: a <b>plan</b> (phases, milestones, budget), a <b>process</b> (how work progresses each sprint), and <b>governance</b> (stakeholders, decisions, risk). The notes below cover each so scope, cost and quality stay under control from kick-off to hypercare." },
+
+    { type: "kpis", title: "Planning at a glance", cols: 4, items: [
+      { val: "8 phases", label: "Discovery → Hypercare", note: "Staged, incremental delivery" },
+      { val: "2-week", label: "Sprint cadence", note: "Plan · build · demo · retro" },
+      { val: "10–20%", label: "Contingency buffer", note: "For change & unknowns" },
+      { val: "RAID", label: "Governance log", note: "Risks · Assumptions · Issues · Dependencies" },
+    ]},
+
+    { type: "timeline", title: "Delivery phases & progress steps", items: [
+      { phase: "Phase 1", dur: "2–3 wks", title: "Discovery & Inception", desc: "Confirm the business case, vision, scope boundaries and measurable success criteria. Identify stakeholders and constraints.", chips: ["Business case", "Scope", "Success metrics", "Stakeholder map"] },
+      { phase: "Phase 2", dur: "2–4 wks", title: "Requirements & Planning", desc: "Build and prioritise the backlog (MoSCoW), estimate effort, and shape a roadmap with milestones and a release plan.", chips: ["Backlog", "Estimates", "Roadmap", "Release plan"] },
+      { phase: "Phase 3", dur: "2–4 wks", title: "Architecture & Design", desc: "Produce HLD/LLD, record key decisions as ADRs, and pin down non-functional requirements (performance, security, scale).", chips: ["HLD / LLD", "ADRs", "NFRs", "Data model"] },
+      { phase: "Phase 4", dur: "8–16 wks", title: "Build — iterative sprints", desc: "Deliver working software every sprint behind CI/CD, with demos for feedback. Scope is traded against the baseline, never silently expanded.", chips: ["Sprints", "CI/CD", "Demos", "Incremental"] },
+      { phase: "Phase 5", dur: "overlapping", title: "Testing & QA", desc: "Automated unit/integration tests plus performance, security and regression testing run continuously alongside the build, gated in the pipeline.", chips: ["Automation", "Performance", "Security", "Regression"] },
+      { phase: "Phase 6", dur: "2–3 wks", title: "UAT", desc: "Business users validate against acceptance criteria using agreed scripts; defects are triaged and sign-off is formal.", chips: ["UAT scripts", "Triage", "Sign-off"] },
+      { phase: "Phase 7", dur: "~1 wk", title: "Release & Deployment", desc: "Go-live with a rehearsed cutover, a rollback plan and runbooks. Deployment is automated and reversible.", chips: ["Cutover", "Rollback", "Runbook", "Go/no-go"] },
+      { phase: "Phase 8", dur: "2–4 wks", title: "Hypercare & Handover", desc: "Heightened monitoring and support to stabilise production, followed by knowledge transfer to the run/BAU team.", chips: ["Monitoring", "Support", "Stabilise", "KT"] },
+    ]},
+
+    { type: "accordion", title: "How work progresses — process & cadence", items: [
+      { title: "Sprint cadence (2 weeks)", badge: "Agile", open: true, blocks: [ { type: "featureList", items: [
+        "<b>Sprint planning</b> — pull prioritised, ready items into the sprint with a clear goal.",
+        "<b>Daily stand-up</b> — 15 min: progress, plan, blockers.",
+        "<b>Backlog refinement</b> — mid-sprint: clarify, estimate and ready upcoming items.",
+        "<b>Sprint review / demo</b> — show working software to stakeholders, gather feedback.",
+        "<b>Retrospective</b> — inspect and adapt the way of working." ]} ]},
+      { title: "Definition of Ready / Definition of Done", badge: "Quality gates", blocks: [ { type: "twoCol", cols: [
+        { type: "featureList", title: "Definition of Ready", items: ["Clear, testable acceptance criteria", "Dependencies known & unblocked", "Estimated & small enough for one sprint", "Design/UX available where needed"] },
+        { type: "featureList", title: "Definition of Done", items: ["Code reviewed & merged", "Automated tests pass; coverage met", "Security/quality gates green (SonarQube)", "Docs updated & demoable in an environment"] },
+      ]} ]},
+      { title: "Governance cadence", badge: "Reporting", blocks: [ { type: "featureList", items: [
+        "<b>Weekly</b> — delivery status (progress, burn-down, blockers, next steps).",
+        "<b>Fortnightly</b> — sprint review + stakeholder demo.",
+        "<b>Monthly</b> — steering committee: scope, budget, risks, decisions.",
+        "<b>Always-on</b> — RAID log and decision/ADR log kept current." ]} ]},
+      { title: "Change control", badge: "Scope", blocks: [ { type: "para", body: "Any change to the baseline scope, budget or timeline is raised as a change request, assessed for impact (cost, schedule, risk), and approved or rejected by the sponsor/steering group before work starts. This is the single biggest defence against scope creep." } ]},
+    ]},
+
+    { type: "table", title: "Budgeting — how the number is built",
+      head: ["Cost category", "What it covers", "How it's estimated", "Typical share"],
+      rows: [
+        ["<b>People / effort</b>", "Dev, QA, BA, PM, architect, UX — day rates × person-days", "Bottom-up: story points → velocity → person-days × blended rate", "60–70%"],
+        ["<b>Cloud / infra (Azure)</b>", "Compute, SQL, Service Bus, storage, bandwidth, non-prod environments", "Azure Pricing Calculator per environment × months", "10–15%"],
+        ["<b>Licenses & tools</b>", "IDEs, SonarQube, monitoring/APM, CI runners, third-party APIs", "Per-seat / per-environment subscriptions", "5–10%"],
+        ["<b>Third-party / vendor</b>", "Payment gateway, integrations, penetration testing", "Fixed quotes / statements of work", "5–10%"],
+        ["<b>Contingency</b>", "Buffer for unknowns, change and risk response", "10–20% of the total estimate", "10–20%"],
+        ["<b>Run / BAU (post go-live)</b>", "Support, cloud run-rate, maintenance, enhancements", "Monthly run-rate forecast", "Ongoing"],
+      ]},
+    { type: "callout", kind: "ok", title: "Estimating & controlling the budget",
+      body: "<b>Estimate</b> bottom-up from the backlog (T-shirt sizes → story points → velocity → cost) and sanity-check top-down against similar projects. <b>Control</b> it with a budget baseline, cloud spend alerts and autoscale caps (FinOps), and track <b>earned value</b> — compare budget <i>consumed</i> against value <i>delivered</i> (CPI/SPI ≈ 1.0 means on track). Re-forecast every milestone, not just at the end." },
+
+    { type: "caps", title: "Stakeholder management — who to engage", cols: 4, items: [
+      { icon: "star", cat: "sec", title: "Sponsor / Exec", desc: "Owns funding & business outcome; final escalation point." },
+      { icon: "user", cat: "client", title: "Product Owner", desc: "Owns the backlog, priorities and acceptance." },
+      { icon: "domain", cat: "domain", title: "Business / End users", desc: "Source of requirements; validate UAT and drive adoption." },
+      { icon: "worker", cat: "app", title: "Delivery team", desc: "Build, test and release the solution." },
+      { icon: "cog", cat: "mon", title: "Operations / SRE", desc: "Run, monitor and support in production." },
+      { icon: "shield", cat: "sec", title: "Security & Compliance", desc: "Approve controls, data handling and audits." },
+      { icon: "globe", cat: "ext", title: "Vendors / Partners", desc: "Third-party APIs, integrations, specialist skills." },
+      { icon: "book", cat: "api", title: "PMO / Governance", desc: "Standards, reporting, cross-project dependencies." },
+    ]},
+    { type: "twoCol", cols: [
+      { type: "table", title: "Power / interest — engagement strategy",
+        head: ["Quadrant", "Approach"],
+        rows: [
+          ["High power · High interest", "<b>Manage closely</b> — sponsor, PO: involve in decisions"],
+          ["High power · Low interest", "<b>Keep satisfied</b> — execs: concise, outcome-focused updates"],
+          ["Low power · High interest", "<b>Keep informed</b> — end users: demos, release notes"],
+          ["Low power · Low interest", "<b>Monitor</b> — light-touch, periodic updates"],
+        ]},
+      { type: "table", title: "Communication plan",
+        head: ["Audience", "Channel", "Frequency"],
+        rows: [
+          ["Steering committee", "Status deck + meeting", "Monthly"],
+          ["Product Owner", "Backlog + stand-up", "Daily"],
+          ["Stakeholders", "Sprint demo", "Fortnightly"],
+          ["Whole team", "Stand-up + board", "Daily"],
+          ["Sponsor", "Exec summary / RAG", "Weekly"],
+        ]},
+    ]},
+    { type: "table", title: "RACI — decision & delivery responsibilities",
+      head: ["Activity", "Sponsor", "Product Owner", "Delivery team", "Ops / Security"],
+      rows: [
+        ["Scope & priorities", "A", "R", "C", "I"],
+        ["Architecture & design", "I", "C", "R", "C"],
+        ["Build & test", "I", "C", "R", "I"],
+        ["Release / go-live", "A", "C", "R", "C"],
+        ["Run & support", "I", "I", "C", "R"],
+      ]},
+    { type: "callout", kind: "info", title: "RACI key",
+      body: "<b>R</b> Responsible (does the work) · <b>A</b> Accountable (owns the outcome, one per row) · <b>C</b> Consulted (two-way input) · <b>I</b> Informed (kept up to date)." },
+
+    { type: "caps", title: "Other important areas to consider", cols: 4, items: [
+      { icon: "doc", cat: "api", title: "Scope clarity", desc: "Baselined, testable requirements; MoSCoW priorities." },
+      { icon: "webhook", cat: "ext", title: "Dependencies", desc: "Upstream/downstream systems and third parties mapped early." },
+      { icon: "user", cat: "client", title: "Resourcing & skills", desc: "Right people available; skill gaps and ramp-up planned." },
+      { icon: "bolt", cat: "app", title: "Non-functionals", desc: "Performance, scalability, availability targets agreed up front." },
+      { icon: "shield", cat: "sec", title: "Compliance & privacy", desc: "Data residency, GDPR, audit and regulatory needs." },
+      { icon: "scale", cat: "domain", title: "Change & adoption", desc: "Training, comms and support so users actually use it." },
+      { icon: "db", cat: "db", title: "Data migration", desc: "Trial runs, reconciliation and rollback for legacy data." },
+      { icon: "cog", cat: "mon", title: "Environments / DevOps", desc: "Dev, test, UAT, prod parity; automated, repeatable pipelines." },
+      { icon: "globe", cat: "ext", title: "Vendor management", desc: "Contracts, SLAs and contract tests for third parties." },
+      { icon: "book", cat: "mon", title: "Documentation & KT", desc: "Runbooks, ADRs and knowledge transfer to BAU." },
+      { icon: "check", cat: "app", title: "Quality strategy", desc: "Test pyramid, coverage targets, automated gates." },
+      { icon: "monitor", cat: "mon", title: "Observability & support", desc: "Logging, alerting and a clear run/support model." },
+    ]},
+
+    { type: "table", title: "Risk register & avoiding measures",
+      head: ["Risk", "Likelihood", "Impact", "Mitigation / avoiding measure"],
+      rows: [
+        ["Scope creep", "High", "High", "Baseline scope + formal change control; MoSCoW; demo-driven feedback"],
+        ["Unclear / changing requirements", "Med", "High", "Discovery workshops, prototypes, Definition of Ready, short feedback loops"],
+        ["Key-person dependency", "Med", "High", "Pairing, documentation, cross-training; no single owner of critical areas"],
+        ["Third-party / integration delays", "Med", "High", "Engage vendors early; mocks/stubs to unblock; contract tests"],
+        ["Cloud cost overrun", "Med", "Med", "Budgets + spend alerts, autoscale caps, regular FinOps review"],
+        ["Security / compliance gaps", "Low", "High", "Security-by-design, early pen-test, SAST/DAST gates, data-privacy review"],
+        ["Performance under load", "Med", "High", "NFRs agreed early, load testing, capacity planning, caching"],
+        ["Schedule slippage", "Med", "Med", "Contingency buffer, velocity tracking, scope trade-offs over deadline moves"],
+        ["Data migration errors", "Med", "High", "Trial migrations, reconciliation reports, rehearsed rollback"],
+        ["Low user adoption", "Med", "Med", "Change management, training, involve users in UAT and demos"],
+      ]},
+    { type: "featureList", title: "Risk-avoiding measures (proactive)", items: [
+      "<b>Review risks continuously</b> — keep a live RAID log; don't treat risk as a one-off at kick-off.",
+      "<b>Deliver incrementally</b> — small, frequent releases surface problems while they're cheap to fix.",
+      "<b>Fail fast with spikes</b> — time-boxed proofs of concept for the riskiest unknowns first.",
+      "<b>Build an MVP first</b> — prove value early; defer nice-to-haves behind the baseline.",
+      "<b>Automate quality gates</b> — tests, coverage, security scans block regressions in the pipeline.",
+      "<b>Hold a contingency buffer</b> — 10–20% of budget and schedule for the unexpected.",
+      "<b>Decide and record</b> — ADRs and a decision log prevent re-litigating and drift.",
+      "<b>Protect the critical path</b> — track dependencies and the longest chain of must-do work.",
+    ]},
+    { type: "callout", kind: "warn", title: "Keep a RAID log",
+      body: "Track <b>R</b>isks (may happen), <b>A</b>ssumptions (believed true, needs confirming), <b>I</b>ssues (already happening), and <b>D</b>ependencies (need something from someone). Review it every week — most failed projects had the warning sitting in a RAID log no one acted on." },
+
+    { type: "metrics", title: "Project health — what good looks like", items: [
+      { label: "Schedule adherence (to plan)", value: "~95%", pct: 95 },
+      { label: "Budget: value delivered vs consumed (CPI)", value: "≈ 1.0", pct: 85 },
+      { label: "Requirements stability", value: "> 90%", pct: 90 },
+      { label: "Defect escape rate to production", value: "< 5%", pct: 92 },
+      { label: "Sprint velocity stability", value: "±10%", pct: 85 },
+      { label: "Stakeholder satisfaction", value: "High", pct: 88 },
+    ]},
+  ],
+});
