@@ -251,6 +251,20 @@ window.SECTIONS.push({
       { val: "RAID", label: "Governance log", note: "Risks · Assumptions · Issues · Dependencies" },
     ]},
 
+    { type: "flow", title: "Delivery lifecycle — phase flow",
+      diagramTitle: "Discovery → Hypercare (staged, gated delivery)",
+      legend: [ {cat:"client",label:"Initiate"},{cat:"api",label:"Plan"},{cat:"domain",label:"Design"},{cat:"app",label:"Build / Test"},{cat:"ext",label:"Release"},{cat:"mon",label:"Operate"} ],
+      steps: [
+        { name: "1 · Discovery & Inception", tech: "vision · scope · business case", icon: "info", cat: "client" },
+        { name: "2 · Requirements & Planning", tech: "backlog · estimates · roadmap", icon: "doc", cat: "api", edge: "scope set" },
+        { name: "3 · Architecture & Design", tech: "HLD / LLD · ADRs · NFRs", icon: "layers", cat: "domain", edge: "backlog ready" },
+        { name: "4 · Build — iterative sprints", tech: "CI/CD · demos · increments", icon: "code", cat: "app", edge: "design approved" },
+        { name: "5 · Testing & QA", tech: "automation · performance · security", icon: "shield", cat: "app", edge: "runs alongside build" },
+        { name: "6 · UAT", tech: "business validation · sign-off", icon: "user", cat: "client", edge: "quality gates green" },
+        { name: "7 · Release & Deployment", tech: "cutover · rollback · runbook", icon: "rocket", cat: "ext", edge: "UAT sign-off" },
+        { name: "8 · Hypercare & Handover", tech: "monitor · stabilise · KT", icon: "monitor", cat: "mon", edge: "go-live" },
+      ]},
+
     { type: "timeline", title: "Delivery phases & progress steps", items: [
       { phase: "Phase 1", dur: "2–3 wks", title: "Discovery & Inception", desc: "Confirm the business case, vision, scope boundaries and measurable success criteria. Identify stakeholders and constraints.", chips: ["Business case", "Scope", "Success metrics", "Stakeholder map"] },
       { phase: "Phase 2", dur: "2–4 wks", title: "Requirements & Planning", desc: "Build and prioritise the backlog (MoSCoW), estimate effort, and shape a roadmap with milestones and a release plan.", chips: ["Backlog", "Estimates", "Roadmap", "Release plan"] },
