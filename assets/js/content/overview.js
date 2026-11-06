@@ -294,6 +294,47 @@ window.SECTIONS.push({
     { type: "callout", kind: "ok", title: "Estimating & controlling the budget",
       body: "<b>Estimate</b> bottom-up from the backlog (T-shirt sizes → story points → velocity → cost) and sanity-check top-down against similar projects. <b>Control</b> it with a budget baseline, cloud spend alerts and autoscale caps (FinOps), and track <b>earned value</b> — compare budget <i>consumed</i> against value <i>delivered</i> (CPI/SPI ≈ 1.0 means on track). Re-forecast every milestone, not just at the end." },
 
+    { type: "table", title: "Budget planning — estimation techniques",
+      head: ["Technique", "How it works", "Best used"],
+      rows: [
+        ["<b>Analogous (top-down)</b>", "Compare to similar past projects for a ballpark", "Earliest stage — rough order of magnitude"],
+        ["<b>Parametric</b>", "Unit cost × quantity (e.g. £/story point, £/screen, £/integration)", "When reliable historical rates exist"],
+        ["<b>Bottom-up</b>", "Estimate every work item, then roll up", "Detailed planning — most accurate, later stages"],
+        ["<b>Three-point (PERT)</b>", "(Optimistic + 4×Likely + Pessimistic) ÷ 6", "Uncertain items — risk-adjusted estimate"],
+      ]},
+    { type: "caps", title: "Budget planning essentials", cols: 3, items: [
+      { icon: "scale", cat: "app", title: "Cost baseline", desc: "Approved, time-phased budget you measure actuals against." },
+      { icon: "shield", cat: "sec", title: "Contingency vs reserve", desc: "Contingency for known risks (team-held); management reserve for unknowns (sponsor-held)." },
+      { icon: "card", cat: "api", title: "CapEx vs OpEx", desc: "Build/one-off spend vs ongoing run cost — cloud is mostly OpEx." },
+      { icon: "globe", cat: "domain", title: "Total cost of ownership", desc: "Build + run + support + licenses over the solution's life, not just delivery." },
+      { icon: "cache", cat: "db", title: "Funding & cash flow", desc: "Phase funding to milestones; forecast monthly spend, not one lump." },
+      { icon: "monitor", cat: "mon", title: "Earned value (EVM)", desc: "CPI = earned ÷ actual, SPI = earned ÷ planned; both ≈ 1.0 = on track." },
+    ]},
+
+    { type: "callout", kind: "info", title: "RFI → RFP → RFQ — buying what you can't build",
+      body: "When a capability or service is procured rather than built in-house, these three documents run (often in sequence) to pick a vendor: an <b>RFI</b> explores the market, an <b>RFP</b> invites solutions, and an <b>RFQ</b> gets firm prices. Picking the right one — and the right order — keeps procurement fair, comparable and defensible." },
+    { type: "table", title: "RFI vs RFP vs RFQ",
+      head: ["", "RFI — Request for Information", "RFP — Request for Proposal", "RFQ — Request for Quotation"],
+      rows: [
+        ["Purpose", "Gather market info & capabilities", "Invite detailed solutions to a defined need", "Get firm prices for a fixed specification"],
+        ["Question it asks", "“Who's out there and what can you do?”", "“How would you solve this, and at what cost?”", "“What is your exact price for this?”"],
+        ["When", "Earliest — exploring options", "Needs defined, solution approach still open", "Requirements/spec fixed and detailed"],
+        ["Basis", "Not an award — shortlists vendors", "Best overall value (solution + price + fit)", "Best/lowest price for the spec"],
+        ["Output", "Vendor shortlist & market insight", "Proposals to evaluate, score & negotiate", "Comparable quotes → PO / contract"],
+      ]},
+    { type: "flow", title: "Procurement sequence",
+      diagramTitle: "Need → RFI → RFP → RFQ → Award",
+      steps: [
+        { name: "Need & budget", tech: "define requirement + budget", icon: "doc", cat: "client" },
+        { name: "RFI", tech: "explore market, shortlist", icon: "book", cat: "api", edge: "who can help?" },
+        { name: "RFP", tech: "request solutions & pricing", icon: "doc", cat: "app", edge: "how & how much?" },
+        { name: "RFQ", tech: "firm quotes on the spec", icon: "card", cat: "sec", edge: "exact price" },
+        { name: "Evaluate & award", tech: "score · negotiate · contract", icon: "check", cat: "domain", edge: "best value" },
+        { name: "Onboard vendor", tech: "SOW · SLAs · contract tests", icon: "worker", cat: "mon", edge: "deliver" },
+      ]},
+    { type: "callout", kind: "ok", title: "Which one do I use?",
+      body: "Not sure who can help or what's possible → <b>RFI</b>. You know the problem but want vendors to propose the <i>how</i> → <b>RFP</b>. You know exactly what you want and just need the <i>price</i> → <b>RFQ</b>. Simple buys can skip straight to an RFQ; complex solutions often run RFI → RFP, with RFQ-style pricing inside the RFP." },
+
     { type: "caps", title: "Stakeholder management — who to engage", cols: 4, items: [
       { icon: "star", cat: "sec", title: "Sponsor / Exec", desc: "Owns funding & business outcome; final escalation point." },
       { icon: "user", cat: "client", title: "Product Owner", desc: "Owns the backlog, priorities and acceptance." },
@@ -376,6 +417,19 @@ window.SECTIONS.push({
     ]},
     { type: "callout", kind: "warn", title: "Keep a RAID log",
       body: "Track <b>R</b>isks (may happen), <b>A</b>ssumptions (believed true, needs confirming), <b>I</b>ssues (already happening), and <b>D</b>ependencies (need something from someone). Review it every week — most failed projects had the warning sitting in a RAID log no one acted on." },
+
+    { type: "table", title: "Stage-level KPIs & exit criteria",
+      head: ["Stage", "Key KPIs to track", "Exit criteria (gate)"],
+      rows: [
+        ["Discovery & Inception", "Scope clarity %, stakeholders identified, business-case ROI", "Charter & funding approved"],
+        ["Requirements & Planning", "Backlog readiness %, estimate confidence, roadmap agreed", "Baselined backlog & release plan"],
+        ["Architecture & Design", "ADRs signed off, NFRs defined, design review score", "Approved HLD / LLD"],
+        ["Build — sprints", "Velocity, sprint-goal hit rate, burn-down, PR cycle time", "Features meet Definition of Done"],
+        ["Testing & QA", "Test coverage %, defect density, pass rate, escaped defects", "Quality gates green"],
+        ["UAT", "UAT pass rate, open critical defects, business sign-off %", "Formal UAT sign-off"],
+        ["Release & Deployment", "Deployment success rate, change-failure rate, rollback readiness", "Go-live approved & stable"],
+        ["Hypercare & Handover", "MTTR, incident count, SLA adherence, KT completion %", "BAU team acceptance"],
+      ]},
 
     { type: "metrics", title: "Project health — what good looks like", items: [
       { label: "Schedule adherence (to plan)", value: "~95%", pct: 95 },
