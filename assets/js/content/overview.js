@@ -390,6 +390,33 @@ window.SECTIONS.push({
     { type: "callout", kind: "info", title: "RACI key",
       body: "<b>R</b> Responsible (does the work) · <b>A</b> Accountable (owns the outcome, one per row) · <b>C</b> Consulted (two-way input) · <b>I</b> Informed (kept up to date)." },
 
+    { type: "callout", kind: "info", title: "Dependency tracking — the when & in what order",
+      body: "A RACI matrix answers <b>who</b> does the work; dependency tracking answers <b>when</b> and <b>in what order</b> it must happen. Map how tasks depend on each other, find the critical path, flag external risks, and review continuously from start to finish." },
+    { type: "table", title: "Four dependency types",
+      head: ["Type", "Rule", "Example"],
+      rows: [
+        ["<b>Finish-to-Start (FS)</b> <span class=\"tag get\">most common</span>", "B starts only after A finishes", "E2E testing starts only after the environment is deployed"],
+        ["<b>Start-to-Start (SS)</b>", "B can start once A starts — the two run in parallel", "UI design starts once UX wireframing starts"],
+        ["<b>Finish-to-Finish (FF)</b>", "B can't finish until A finishes", "Documentation is finalised only after coding is complete"],
+        ["<b>Start-to-Finish (SF)</b> <span class=\"tag put\">rare</span>", "B can't finish until A starts", "The legacy server is shut down only once the new one goes live"],
+      ]},
+    { type: "accordion", title: "A three-phase approach to tracking dependencies", items: [
+      { title: "1 · Break down the work", badge: "Decompose", open: true, blocks: [ { type: "para", body: "Build a <b>Work Breakdown Structure (WBS)</b> that splits the project into tasks, then for each task list its <b>predecessors</b> — what must happen before it can proceed." } ]},
+      { title: "2 · Visualise it", badge: "Critical path", blocks: [ { type: "para", body: "Use a <b>Gantt chart</b> to lay tasks out over time with dependency links, and identify the <b>critical path</b> — the longest chain of dependent tasks. Any delay on that chain delays the whole project, so it gets the most attention." } ]},
+      { title: "3 · Plan for risk", badge: "Buffers & externals", blocks: [ { type: "featureList", items: [
+        "Add <b>lead time</b> (a task can start early, overlapping its predecessor) and <b>lag time</b> (a deliberate wait between tasks).",
+        "Flag <b>external dependencies</b> you don't control — client sign-offs, vendor APIs, hardware delivery — and track them as risks." ]} ]},
+    ]},
+    { type: "table", title: "Tools by project size",
+      head: ["Project size", "Tools", "How dependencies are tracked"],
+      rows: [
+        ["<b>Small</b>", "Trello / basic Jira", "“Blocked by” tags and parent/child links"],
+        ["<b>Medium</b>", "Asana, Monday.com, ClickUp", "Timeline views with dependency arrows"],
+        ["<b>Large</b>", "Jira Advanced Roadmaps, MS Project", "Critical path calculated automatically; work linked across teams"],
+      ]},
+    { type: "callout", kind: "warn", title: "Keep monitoring",
+      body: "Dependencies change over time — review them regularly. Raise <b>blockers</b> in daily stand-ups and check <b>upcoming dependencies</b> in sprint planning. The takeaway: break the work down, map how tasks depend on each other, find the critical path, flag external risks, and review continuously." },
+
     { type: "caps", title: "Other important areas to consider", cols: 4, items: [
       { icon: "doc", cat: "api", title: "Scope clarity", desc: "Baselined, testable requirements; MoSCoW priorities." },
       { icon: "webhook", cat: "ext", title: "Dependencies", desc: "Upstream/downstream systems and third parties mapped early." },
